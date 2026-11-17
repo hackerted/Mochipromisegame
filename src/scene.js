@@ -349,11 +349,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   });
   let tedHips = null;
   let tedRightHand = null;
+  let tedHead = null;
   ted.traverse((node) => {
     if (!node.isBone) return;
     const boneName = node.name.toLowerCase().replace(/[^a-z]/g, '');
     if (boneName.endsWith('mixamorigHips'.toLowerCase())) tedHips = node;
     if (boneName.endsWith('mixamorigrighthand')) tedRightHand = node;
+    if (boneName.endsWith('mixamorighead')) tedHead = node;
   });
   const mrLee = mrLeeAsset;
   mrLee.traverse((node) => {
@@ -520,6 +522,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   reserved.push({ ...mochiStoolPosition, r: 0.75 });
   let mochiHolder = null;
   let mochiShared = false;
+  let mochiEating = null;
+  let mochiConsumed = false;
 
   // The story bench sits on its own paved patch on the grass, facing the loop.
   const benchPad = new T.Mesh(new T.BoxGeometry(2.4, 0.04, 1.9), new T.MeshStandardMaterial({ color: '#b3aa98', roughness: 0.9 }));
@@ -708,11 +712,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   fitToHeight(sooAh, 1.0);
   let sooAhHips = null;
   let sooAhLeftHand = null;
+  let sooAhHead = null;
   sooAh.traverse((node) => {
     if (!node.isBone) return;
     const boneName = node.name.toLowerCase().replace(/[^a-z]/g, '');
     if (boneName.endsWith('mixamorighips')) sooAhHips = node;
     if (boneName.endsWith('mixamoriglefthand')) sooAhLeftHand = node;
+    if (boneName.endsWith('mixamorighead')) sooAhHead = node;
   });
   sooAh.name = 'SooAh';
   sooAh.position.set(0.24, 0.175, 0.15);
@@ -1021,6 +1027,45 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   let selectedCharacter = 'SooAh';
   const standingCharacters = new Set();
   const characterRoots = { SooAh: sooAh, Ted: tedRoot };
+  const mochiMouthWorld = new T.Vector3();
+  const mochiMouthLocal = new T.Vector3();
+  const mochiMouthOffset = new T.Vector3(0, 0.015, 0.075);
+  const mochiNodAxis = new T.Vector3(1, 0, 0);
+  const mochiNodRotation = new T.Quaternion();
+  const updateMochiEating = (dt) => {
+    if (!mochiEating) return;
+    const state = mochiEating;
+    state.elapsed = Math.min(state.duration, state.elapsed + dt);
+    const hand = state.recipient === 'SooAh' ? sooAhLeftHand : tedRightHand;
+    const head = state.recipient === 'SooAh' ? sooAhHead : tedHead;
+    if (!hand || !head) return;
+    const progress = clamp((state.elapsed - 1.2) / 0.9, 0, 1);
+    if (progress > 0) {
+      characterRoots[state.recipient].updateMatrixWorld(true);
+      head.updateMatrixWorld(true);
+      hand.updateMatrixWorld(true);
+      mochiMouthWorld.copy(mochiMouthOffset).applyMatrix4(head.matrixWorld);
+      mochiMouthLocal.copy(hand.worldToLocal(mochiMouthWorld));
+      const eased = progress * progress * (3 - 2 * progress);
+      mochiItem.position.lerpVectors(state.startPosition, mochiMouthLocal, eased);
+      const bite = clamp((progress - 0.75) / 0.25, 0, 1);
+      mochiItem.scale.copy(state.startScale).multiplyScalar(1 - bite);
+    }
+    if (state.startHeadQuaternion) {
+      const nodProgress = clamp((state.elapsed - 1.35) / 0.55, 0, 1);
+      const nodAngle = Math.sin(Math.PI * nodProgress) * 0.12;
+      head.quaternion.copy(state.startHeadQuaternion)
+        .multiply(mochiNodRotation.setFromAxisAngle(mochiNodAxis, nodAngle));
+    }
+    if (state.elapsed >= state.duration) {
+      mochiItem.visible = false;
+      mochiItem.scale.copy(mochiScale);
+      if (state.startHeadQuaternion) head.quaternion.copy(state.startHeadQuaternion);
+      mochiConsumed = true;
+      mochiEating = null;
+      message = state.recipient === 'SooAh' ? 'Soo-ah eats the mochi.' : 'Ted eats the mochi.';
+    }
+  };
   const sitClearance = { SooAh: { y: 0.04, z: 0 }, Ted: { y: 0, z: 0.12 } };
   const characterMode = { SooAh: 'sitting', Ted: 'sitting' };
   const standingReady = new Set();
@@ -1335,13 +1380,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const hand = name === 'Ted' ? tedRightHand : sooAhLeftHand;
     if (!hand) return false;
     hand.add(mochiItem);
-    mochiItem.position.set(0.015, 0.025, 0.025);
+    mochiItem.visible = true;
+    mochiItem.scale.copy(mochiScale).multiplyScalar(1.7);
+    mochiItem.position.set(0.02, 0.085, 0.14);
     mochiItem.rotation.set(0, 0, 0);
     return true;
   };
   const pickUpMochi = () => {
     if (!routeStarted || mochiHolder || mochiShared || !attachMochiToHand(selectedCharacter)) return false;
     mochiHolder = selectedCharacter;
+    mochiConsumed = false;
+    mochiEating = null;
     message = `${selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah'} picks up the mochi.`;
     return true;
   };
@@ -1351,6 +1400,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (!attachMochiToHand(receiver)) return false;
     mochiHolder = receiver;
     mochiShared = true;
+    mochiConsumed = false;
+    mochiEating = {
+      recipient: receiver,
+      elapsed: 0,
+      duration: 2.4,
+      startPosition: mochiItem.position.clone(),
+      startScale: mochiItem.scale.clone(),
+      startHeadQuaternion: (receiver === 'SooAh' ? sooAhHead : tedHead)?.quaternion.clone() ?? null,
+    };
     message = selectedCharacter === 'Ted' ? 'Ted gives Soo-ah the mochi.' : 'Soo-ah shares the mochi with Ted.';
     return true;
   };
@@ -1888,6 +1946,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     for (const name of ['SooAh', 'Ted']) {
       if (sittingCharacters.has(name) || sittingDown.has(name) || characterMode[name] === 'standingUp') clampSeatedPelvis(name);
     }
+    updateMochiEating(dt);
     // Last, so the camera sees where every root ended up this frame.
     if (followCamera.mode !== 'free') updateFollowCamera(dt);
     if (debugRecording) {
@@ -2137,7 +2196,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
       mochiHolder = null;
       mochiShared = false;
+      mochiConsumed = false;
+      mochiEating = null;
       mochiStool.add(mochiItem);
+      mochiItem.visible = true;
+      mochiItem.scale.copy(mochiScale);
       mochiItem.position.copy(mochiOnStoolPosition);
       mochiItem.rotation.set(0, 0, 0);
       mrLeeAware = false;
@@ -2148,8 +2211,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       placeAtBenchAnchor('Ted', seatAnchors.Ted);
       const giveTarget = nearest();
       const gaveToSooAh = interact();
-      const inSooAhHand = mochiShared && mochiItem.parent === sooAhLeftHand;
       setCameraView('right');
+      frames = 0;
+      while (gaveToSooAh && !mochiConsumed && frames++ < 180) await nextFrame();
+      const inSooAhHand = mochiShared && mochiItem.parent === sooAhLeftHand;
       return {
         pickupTarget,
         pickedUp,
@@ -2158,6 +2223,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         gaveToSooAh,
         inSooAhHand,
         mochiShared,
+        mochiConsumed,
+        mochiHiddenAfterBite: !mochiItem.visible,
         stoolPosition: { ...mochiStoolPosition },
       };
     },
