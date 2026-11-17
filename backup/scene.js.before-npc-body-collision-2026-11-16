@@ -1,0 +1,1286 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+const sooAhStandSpeed = 4;
+const sooAhSitSpeed = 2;
+
+function seededRandom(seed) {
+  let value = seed >>> 0;
+  return () => {
+    value = (value + 0x6D2B79F5) | 0;
+    let next = value;
+    next = Math.imul(next ^ (next >>> 15), next | 1);
+    next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+    return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+async function gltf(loader, url) {
+  return loader.loadAsync(url);
+}
+
+async function loadGltfClip(loader, url) {
+  const asset = await loader.loadAsync(url);
+  return asset.animations?.[0]?.clone();
+}
+
+function disposeFbxAsset(root) {
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  root.traverse((node) => {
+    if (node.geometry) geometries.add(node.geometry);
+    for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+      if (!material) continue;
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
+  });
+  for (const texture of textures) texture.dispose();
+  for (const material of materials) material.dispose();
+  for (const geometry of geometries) geometry.dispose();
+}
+
+async function loadFbxClip(loader, url) {
+  const root = await loader.loadAsync(url);
+  const clip = root.animations?.[0]?.clone();
+  disposeFbxAsset(root);
+  return clip;
+}
+
+function fitToHeight(root, height) {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  root.scale.multiplyScalar(height / Math.max(size.y, 0.001));
+  root.updateMatrixWorld(true);
+  root.position.y -= new THREE.Box3().setFromObject(root).min.y;
+}
+
+function applyCharacterTexture(root, texture, maxAnisotropy, flipY = false) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = flipY;
+  texture.anisotropy = Math.min(16, maxAnisotropy);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  root.traverse((node) => {
+    if (!node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const replacements = materials.map((source) => new THREE.MeshStandardMaterial({
+      color: '#ffffff', map: texture, roughness: 0.78, metalness: 0,
+      side: source.side, transparent: source.transparent, opacity: source.opacity,
+    }));
+    node.material = Array.isArray(node.material) ? replacements : replacements[0];
+  });
+}
+
+function setShadows(root, receive = true) {
+  root.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = receive;
+    }
+  });
+}
+
+function inPlaceWalk(clip) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  adjusted.tracks = adjusted.tracks.filter((track) => {
+    const name = track.name.toLowerCase();
+    const [node, property] = name.split('.');
+    const bone = node.replace(/[^a-z]/g, '');
+    if (bone.endsWith('mixamorighips')) return false;
+    if (property === 'quaternion' && /mixamorig(spine|spine1|spine2|neck|head|headtopend)$/.test(bone)) return false;
+    return true;
+  });
+  return adjusted;
+}
+
+function inPlaceSit(clip, verticalOffset = 0) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  for (const track of adjusted.tracks) {
+    if (!track.name.toLowerCase().endsWith('.position')
+      || !track.name.slice(0, -'.position'.length).toLowerCase().replace(/[^a-z]/g, '').endsWith('mixamorighips')) continue;
+    const x = track.values[0];
+    const y = track.values[1];
+    for (let i = 0; i < track.values.length; i += 3) {
+      track.values[i] = x;
+      track.values[i + 1] = y;
+      track.values[i + 2] += verticalOffset;
+    }
+  }
+  return adjusted;
+}
+
+function inPlaceStandTransition(clip) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  for (const track of adjusted.tracks) {
+    if (!track.name.toLowerCase().endsWith('.position')
+      || !track.name.slice(0, -'.position'.length).toLowerCase().replace(/[^a-z]/g, '').endsWith('mixamorighips')) continue;
+    const x = track.values[0];
+    const z = track.values[2];
+    for (let i = 0; i < track.values.length; i += 3) {
+      track.values[i] = x;
+      track.values[i + 2] = z;
+    }
+  }
+  return adjusted;
+}
+
+function inPlaceSitDown(clip) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  for (const track of adjusted.tracks) {
+    if (!track.name.toLowerCase().endsWith('.position')
+      || !track.name.slice(0, -'.position'.length).toLowerCase().replace(/[^a-z]/g, '').endsWith('mixamorighips')) continue;
+    const x = track.values[0];
+    for (let i = 0; i < track.values.length; i += 3) track.values[i] = x;
+  }
+  return adjusted;
+}
+
+function inPlaceFbxWalk(clip) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  adjusted.tracks = adjusted.tracks.filter((track) => {
+    const name = track.name.toLowerCase();
+    if (!name.endsWith('.position')) return true;
+    return !name.slice(0, -'.position'.length).replace(/[^a-z]/g, '').endsWith('mixamorighips');
+  });
+  return adjusted;
+}
+
+function inPlaceTurn(clip) {
+  if (!clip) return clip;
+  const adjusted = clip.clone();
+  // Turn clips carry pelvis yaw; the controller applies that measured yaw to the actor root instead.
+  adjusted.tracks = adjusted.tracks.filter((track) =>
+    !track.name.toLowerCase().split('.')[0].replace(/[^a-z]/g, '').endsWith('mixamorighips'));
+  return adjusted;
+}
+
+function measuredTurnAngle(clip) {
+  const track = clip?.tracks.find((item) => {
+    const name = item.name.toLowerCase();
+    return name.endsWith('.quaternion')
+      && name.slice(0, -'.quaternion'.length).replace(/[^a-z]/g, '').endsWith('mixamorighips');
+  });
+  if (!track || track.getValueSize() !== 4) return Math.PI / 2;
+  const size = track.getValueSize();
+  const start = new THREE.Quaternion().fromArray(track.values.slice(0, size));
+  const end = new THREE.Quaternion().fromArray(track.values.slice(-size));
+  const delta = start.invert().multiply(end);
+  const yaw = new THREE.Euler().setFromQuaternion(delta, 'YXZ').y;
+  return Math.max(0.2, Math.abs(yaw));
+}
+
+export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) {
+  const scene = new T.Scene();
+  scene.background = new T.Color('#d9e9f2');
+
+  const hemi = new T.HemisphereLight('#fff5e9', '#77736c', 2.2);
+  scene.add(hemi);
+  const sun = new T.DirectionalLight('#fff4e6', 2.4);
+  sun.position.set(-3, 5, 4);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -3;
+  sun.shadow.camera.right = 3;
+  sun.shadow.camera.top = 3;
+  sun.shadow.camera.bottom = -3;
+  scene.add(sun);
+
+  const grassCanvas = document.createElement('canvas');
+  grassCanvas.width = grassCanvas.height = 512;
+  const grassContext = grassCanvas.getContext('2d');
+  grassContext.fillStyle = '#9fbe72';
+  grassContext.fillRect(0, 0, 512, 512);
+  const grassTextureRandom = seededRandom(73);
+  const grassStrokes = ['rgba(49, 104, 48, .16)', 'rgba(205, 220, 129, .22)', 'rgba(78, 132, 55, .2)'];
+  for (let i = 0; i < 1500; i++) {
+    const x = grassTextureRandom() * 512;
+    const y = grassTextureRandom() * 512;
+    grassContext.strokeStyle = grassStrokes[i % grassStrokes.length];
+    grassContext.lineWidth = 1 + grassTextureRandom() * 1.5;
+    grassContext.beginPath();
+    grassContext.moveTo(x, y);
+    grassContext.lineTo(x + (grassTextureRandom() - 0.5) * 3, y - 2 - grassTextureRandom() * 5);
+    grassContext.stroke();
+  }
+  const grassTexture = new T.CanvasTexture(grassCanvas);
+  grassTexture.colorSpace = T.SRGBColorSpace;
+  grassTexture.wrapS = grassTexture.wrapT = T.RepeatWrapping;
+  grassTexture.repeat.set(4, 4);
+  grassTexture.anisotropy = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
+  const groundGeometry = new T.PlaneGeometry(70, 70, 96, 96);
+  const groundPositions = groundGeometry.attributes.position;
+  const groundColors = new Float32Array(groundPositions.count * 3);
+  const grassBase = new T.Color('#6f9f55');
+  for (let i = 0; i < groundPositions.count; i++) {
+    const x = groundPositions.getX(i);
+    const z = -groundPositions.getY(i);
+    const distance = Math.hypot(x, z);
+    const hill = T.MathUtils.smoothstep(distance, 7, 24);
+    const waves = 1.5 + 0.45 * Math.sin(x * 0.19) + 0.35 * Math.cos(z * 0.22) + 0.2 * Math.sin((x + z) * 0.31);
+    groundPositions.setZ(i, -0.012 + hill * waves);
+    const tint = 0.94 + 0.045 * Math.sin(x * 0.8) * Math.cos(z * 0.67) + 0.02 * Math.sin((x - z) * 1.4);
+    const color = grassBase.clone().multiplyScalar(tint);
+    groundColors[i * 3] = color.r;
+    groundColors[i * 3 + 1] = color.g;
+    groundColors[i * 3 + 2] = color.b;
+  }
+  groundGeometry.setAttribute('color', new T.Float32BufferAttribute(groundColors, 3));
+  groundGeometry.computeVertexNormals();
+  const floor = new T.Mesh(groundGeometry, new T.MeshStandardMaterial({ color: '#ffffff', map: grassTexture, vertexColors: true, roughness: 1 }));
+  floor.name = 'ParkGrassTerrain';
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const pathShape = new T.Shape();
+  pathShape.moveTo(0.55, -0.25);
+  pathShape.quadraticCurveTo(1.0, 0.65, 2.0, 2.4);
+  pathShape.quadraticCurveTo(2.55, 4.0, 2.62, 7.25);
+  pathShape.lineTo(3.28, 7.25);
+  pathShape.quadraticCurveTo(3.22, 4.2, 2.46, 2.0);
+  pathShape.quadraticCurveTo(1.55, 0.0, 1.2, -0.25);
+  pathShape.closePath();
+  const path = new T.Mesh(new T.ShapeGeometry(pathShape, 16), new T.MeshStandardMaterial({ color: '#b4a47f', roughness: 1 }));
+  path.name = 'CafeGardenPath';
+  path.rotation.x = -Math.PI / 2;
+  path.position.y = -0.004;
+  path.receiveShadow = true;
+  scene.add(path);
+
+  const gltfLoader = loaders.gltf ?? new GLTFLoader(loaders.manager);
+  const fbxLoader = new FBXLoader(loaders.manager);
+  const textureLoader = new T.TextureLoader(loaders.manager);
+  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset] = await Promise.all([
+    gltf(gltfLoader, './assets/park-chair-stage.glb'),
+    fbxLoader.loadAsync('./assets/animations/mr-lee/Idle-2.fbx'),
+    gltf(gltfLoader, './assets/ted-stage.glb'),
+    fbxLoader.loadAsync('./assets/soo-ah-sitting.fbx'),
+    textureLoader.loadAsync('./assets/textures/mr-lee.png'),
+    textureLoader.loadAsync('./assets/textures/ted.png'),
+    textureLoader.loadAsync('./assets/textures/soo-ah.png'),
+    gltf(gltfLoader, './assets/props/korean_cafe.glb'),
+    gltf(gltfLoader, './assets/props/cherry_tree.glb'),
+  ]);
+  const clips = {};
+  const clipLoads = {};
+  const animationFiles = {
+    SooAhWalk: { url: './assets/soo-ah-walking.fbx', type: 'fbx' },
+    SooAhRun: { url: './assets/animations/soo-ah/soo-ah-slow-run.fbx', type: 'fbx' },
+    SooAhLookBehindRun: { url: './assets/animations/soo-ah/soo-ah-look-behind-run.fbx', type: 'fbx' },
+    SooAhTurnLeft: { url: './assets/soo-ah-turn-left.fbx', type: 'fbx' },
+    SooAhTurnRight: { url: './assets/soo-ah-turn-right.fbx', type: 'fbx' },
+    SooAhSitToStand: { url: './assets/soo-ah-sit-to-stand.fbx', type: 'fbx' },
+    SooAhStandToSit: { url: './assets/soo-ah-stand-to-sit.fbx', type: 'fbx' },
+    SooAhSittingTalk: { url: './assets/animations/soo-ah/soo-ah-sitting-talking.fbx', type: 'fbx' },
+    SooAhNervous: { url: './assets/animations/soo-ah/soo-ah-nervous-look-around.fbx', type: 'fbx' },
+    SooAhTerrified: { url: './assets/animations/soo-ah/soo-ah-terrified.fbx', type: 'fbx' },
+    TedWalk: { url: './assets/animations/ted/ted-walking.glb', type: 'gltf' },
+    TedWalkAlternative: { url: './assets/animations/ted/ted-walking-alternative.glb', type: 'gltf' },
+    TedRun: { url: './assets/animations/ted/ted-fast-run.glb', type: 'gltf' },
+    TedTurnLeft: { url: './assets/animations/ted/ted-left-turn.glb', type: 'gltf' },
+    TedTurnRight: { url: './assets/animations/ted/ted-right-turn.glb', type: 'gltf' },
+    TedSitting: { url: './assets/animations/ted/ted-sitting-idle.glb', type: 'gltf' },
+    TedSittingTalk: { url: './assets/animations/ted/ted-sitting-talking.glb', type: 'gltf' },
+    TedSitToStand: { url: './assets/animations/ted/ted-sit-to-stand.glb', type: 'gltf' },
+    TedStandToSit: { url: './assets/animations/ted/ted-stand-to-sit.glb', type: 'gltf' },
+    TedNervous: { url: './assets/animations/ted/ted-nervous-look-around.glb', type: 'gltf' },
+    TedTerrified: { url: './assets/animations/ted/ted-terrified.glb', type: 'gltf' },
+    MrLeeWalk: { url: './assets/animations/mr-lee/Walking-2.fbx', type: 'fbx' },
+  };
+  const ted = tedAsset.scene;
+  ted.traverse((node) => {
+    if (node.isBone) node.name = T.PropertyBinding.sanitizeNodeName(node.name);
+  });
+  const mrLee = mrLeeAsset;
+  mrLee.traverse((node) => {
+    if (node.isBone) node.name = T.PropertyBinding.sanitizeNodeName(node.name);
+  });
+  const bench = chairAsset.scene;
+  // Ted's stage GLB is +40.107° from his base rig; undo it at the visual pivot.
+  const tedBenchYaw = T.MathUtils.degToRad(40.107);
+  const mrLeeRoot = new T.Group();
+  const tedRoot = new T.Group();
+  const tedVisualPivot = new T.Group();
+  const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
+
+  bench.name = 'WoodenParkChair';
+  setShadows(bench);
+  bench.traverse((node) => {
+    if (node.isMesh) node.receiveShadow = false;
+  });
+  scene.add(bench);
+  const cafeRoot = new T.Group();
+  const cafe = cafeAsset.scene.clone(true);
+  const cafeBounds = new T.Box3().setFromObject(cafe);
+  const cafeCenter = cafeBounds.getCenter(new T.Vector3());
+  const cafeScale = 0.43;
+  cafe.scale.setScalar(cafeScale);
+  cafe.position.set(-cafeCenter.x * cafeScale, -cafeBounds.min.y * cafeScale, -cafeCenter.z * cafeScale);
+  cafe.name = 'KoreanCafeModel';
+  cafeRoot.name = 'KoreanCafe';
+  cafeRoot.position.set(3.4, -1.07, -9.0);
+  cafeRoot.add(cafe);
+  setShadows(cafeRoot);
+  scene.add(cafeRoot);
+
+  const treeRandom = seededRandom(20261116);
+  const treeAnchors = [[-5.7, -5.3], [-5.8, -1.6], [-5.6, 2.4], [6.4, -6.0], [6.3, -2.1], [6.2, 2.3], [-1.0, -6.0]];
+  for (const [index, [x, z]] of treeAnchors.entries()) {
+    const tree = new T.Group();
+    const model = cherryTreeAsset.scene.clone(true);
+    model.traverse((node) => {
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      if (node.isMesh && materials.some((material) => material?.name === 'Material.003')) node.parent.remove(node);
+    });
+    model.rotation.y = (treeRandom() - 0.5) * 0.38;
+    const bounds = new T.Box3().setFromObject(model);
+    const center = bounds.getCenter(new T.Vector3());
+    const scale = 0.12;
+    model.scale.setScalar(scale);
+    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+    model.name = `CherryTreeModel_${index}`;
+    tree.name = `CherryTree_${index}`;
+    tree.position.set(x + (treeRandom() - 0.5) * 0.5, -0.02, z + (treeRandom() - 0.5) * 0.5);
+    tree.add(model);
+    setShadows(tree, false);
+    scene.add(tree);
+  }
+  const benchColliders = [];
+  const addBenchCollider = (name, part, center, size) => {
+    const collider = new T.Mesh(new T.BoxGeometry(...size), new T.MeshBasicMaterial());
+    collider.name = name;
+    collider.visible = false;
+    collider.position.set(...center);
+    collider.userData.collisionPart = part;
+    collider.userData.halfExtents = size.map((value) => value / 2);
+    bench.add(collider);
+    benchColliders.push(collider);
+  };
+  addBenchCollider('BenchSeatCollider', 'seat', [0, 0.35, 0.02], [1.30, 0.08, 0.44]);
+  addBenchCollider('BenchBackrestCollider', 'backrest', [0, 0.55, -0.235], [1.25, 0.30, 0.12]);
+  addBenchCollider('BenchLeftSupportCollider', 'support', [-0.61, 0.28, 0.02], [0.14, 0.56, 0.50]);
+  addBenchCollider('BenchRightSupportCollider', 'support', [0.61, 0.28, 0.02], [0.14, 0.56, 0.50]);
+
+  applyCharacterTexture(sooAh, sooAhTexture, maxAnisotropy, true);
+  fitToHeight(sooAh, 1.0);
+  sooAh.name = 'SooAh';
+  sooAh.position.set(0.24, 0.175, 0.15);
+  sooAh.rotation.y = 0;
+  setShadows(sooAh, false);
+  scene.add(sooAh);
+
+  applyCharacterTexture(ted, tedTexture, maxAnisotropy);
+  fitToHeight(ted, 1.0);
+  ted.name = 'TedVisual';
+  ted.position.set(0, 0, 0);
+  tedVisualPivot.name = 'TedVisualPivot';
+  tedVisualPivot.rotation.y = -tedBenchYaw;
+  tedVisualPivot.add(ted);
+  tedRoot.name = 'TedMovementRoot';
+  tedRoot.position.set(-0.16, 0.145, 0.21);
+  tedRoot.rotation.y = 0;
+  tedRoot.add(tedVisualPivot);
+  setShadows(ted, false);
+  scene.add(tedRoot);
+
+  applyCharacterTexture(mrLee, mrLeeTexture, maxAnisotropy, true);
+  fitToHeight(mrLee, 1.6);
+  mrLee.name = 'MrLeeVisual';
+  mrLee.position.set(0, 0, 0);
+  mrLee.rotation.y = 0;
+  mrLeeRoot.name = 'MrLeeMovementRoot';
+  mrLeeRoot.position.set(3.4, 0, -7.0);
+  mrLeeRoot.add(mrLee);
+  setShadows(mrLee, false);
+  scene.add(mrLeeRoot);
+
+  const mixers = [];
+  const characterMixers = {};
+  const characterActions = {};
+  const sittingClips = { SooAh: sooAh.animations?.[0], Ted: null };
+  const walkingClips = { SooAh: null, Ted: null };
+  const walkingVariants = { Ted: null };
+  const runningClips = { SooAh: null, Ted: null };
+  let lookBehindRunClip = null;
+  const turnClips = {
+    SooAh: { left: null, right: null },
+    Ted: { left: null, right: null },
+  };
+  const turnAngles = {
+    SooAh: { left: Math.PI / 2, right: Math.PI / 2 },
+    Ted: { left: Math.PI / 2, right: Math.PI / 2 },
+  };
+  const sittingTalkClips = { SooAh: null, Ted: null };
+  const nervousClips = { SooAh: null, Ted: null };
+  const terrifiedClips = { SooAh: null, Ted: null };
+  const sitToStandClips = { SooAh: null, Ted: null };
+  const standToSitClips = { SooAh: null, Ted: null };
+  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeAsset.animations?.[0]), walk: null };
+  const setLoadedClip = (name, clip) => {
+    clips[name] = clip;
+    if (name === 'SooAhWalk') walkingClips.SooAh = inPlaceFbxWalk(clip);
+    if (name === 'TedWalk') walkingClips.Ted = inPlaceFbxWalk(clip);
+    if (name === 'TedWalkAlternative') walkingVariants.Ted = inPlaceFbxWalk(clip);
+    if (name === 'SooAhRun') runningClips.SooAh = inPlaceFbxWalk(clip);
+    if (name === 'TedRun') runningClips.Ted = inPlaceFbxWalk(clip);
+    if (name === 'SooAhLookBehindRun') lookBehindRunClip = inPlaceFbxWalk(clip);
+    if (name === 'SooAhTurnLeft') { turnClips.SooAh.left = inPlaceTurn(clip); turnAngles.SooAh.left = measuredTurnAngle(clip); }
+    if (name === 'SooAhTurnRight') { turnClips.SooAh.right = inPlaceTurn(clip); turnAngles.SooAh.right = measuredTurnAngle(clip); }
+    if (name === 'TedTurnLeft') { turnClips.Ted.left = inPlaceTurn(clip); turnAngles.Ted.left = measuredTurnAngle(clip); }
+    if (name === 'TedTurnRight') { turnClips.Ted.right = inPlaceTurn(clip); turnAngles.Ted.right = measuredTurnAngle(clip); }
+    if (name === 'TedSitting') sittingClips.Ted = clip;
+    if (name === 'SooAhSittingTalk') sittingTalkClips.SooAh = clip;
+    if (name === 'TedSittingTalk') sittingTalkClips.Ted = inPlaceSit(clip);
+    if (name === 'SooAhNervous') nervousClips.SooAh = clip;
+    if (name === 'TedNervous') nervousClips.Ted = clip;
+    if (name === 'SooAhTerrified') terrifiedClips.SooAh = clip;
+    if (name === 'TedTerrified') terrifiedClips.Ted = clip;
+    if (name === 'SooAhSitToStand') sitToStandClips.SooAh = inPlaceStandTransition(clip);
+    if (name === 'TedSitToStand') sitToStandClips.Ted = inPlaceStandTransition(clip);
+    if (name === 'SooAhStandToSit') standToSitClips.SooAh = inPlaceSitDown(clip);
+    if (name === 'TedStandToSit') standToSitClips.Ted = inPlaceStandTransition(clip);
+    if (name === 'MrLeeWalk') {
+      mrLeeClips.walk = inPlaceStandTransition(clip);
+    }
+    return clip;
+  };
+  const ensureClip = (name) => {
+    if (clips[name]) return Promise.resolve(clips[name]);
+    if (!clipLoads[name]) {
+      const source = animationFiles[name];
+      const load = source.type === 'fbx'
+        ? loadFbxClip(fbxLoader, source.url) : loadGltfClip(gltfLoader, source.url);
+      clipLoads[name] = load.then((clip) => {
+        if (!clip) throw new Error(`No animation clip in ${source.url}`);
+        return setLoadedClip(name, clip);
+      }).finally(() => { delete clipLoads[name]; });
+    }
+    return clipLoads[name];
+  };
+  await Promise.all(Object.keys(animationFiles).filter((name) => name.startsWith('Ted')).map(ensureClip));
+  for (const name of ['SooAhWalk', 'SooAhRun', 'SooAhTurnLeft', 'SooAhTurnRight', 'SooAhSitToStand', 'SooAhStandToSit', 'SooAhSittingTalk']) await ensureClip(name);
+  await ensureClip('MrLeeWalk');
+  const activeWalkVariant = { Ted: 'folder' };
+  const walkClipFor = (name) => name === 'Ted' && activeWalkVariant.Ted === 'alternative'
+    ? walkingVariants.Ted : walkingClips[name];
+  const emotionalStates = {};
+  const sittingTalkTimers = { SooAh: 0, Ted: 0 };
+  let lookBehindRun = false;
+  const sittingCharacters = new Set(['SooAh', 'Ted']);
+  const playClip = (name, clip, { loop = false, fade = 0.16 } = {}) => {
+    const mixer = characterMixers[name];
+    if (!mixer || !clip) return null;
+    delete fadingMovement[name];
+    const previous = characterActions[name];
+    if (previous?.getClip() === clip && previous.isRunning()) return previous;
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(loop ? T.LoopRepeat : T.LoopOnce, loop ? Infinity : 1);
+    action.clampWhenFinished = !loop;
+    if (previous && previous !== action) previous.fadeOut(fade);
+    action.fadeIn(fade).play();
+    characterActions[name] = action;
+    return action;
+  };
+  const restoreIdle = (name) => {
+    const mixer = characterMixers[name];
+    if (!mixer) return;
+    if (sittingCharacters.has(name)) {
+      playClip(name, sittingClips[name], { loop: true, fade: 0.2 });
+      characterMode[name] = 'sitting';
+      return;
+    }
+    mixer.stopAllAction();
+    mixer.update(0);
+    restoreStandingPose(name);
+    characterActions[name] = null;
+    characterMode[name] = standingCharacters.has(name) ? 'standingIdle' : 'sitting';
+  };
+  for (const [actor, actorClips] of [[sooAh, sooAh.animations], [ted, tedAsset.animations]]) {
+    if (actorClips?.length) {
+      const mixer = new T.AnimationMixer(actor);
+      const name = actor === sooAh ? 'SooAh' : actor === ted ? 'Ted' : null;
+      const idleClip = name ? sittingClips[name] : actorClips[0];
+      const action = mixer.clipAction(idleClip);
+      action.play();
+      mixers.push(mixer);
+      if (name) {
+        characterMixers[name] = mixer;
+        characterActions[name] = action;
+      }
+    }
+  }
+  const mrLeeMixer = new T.AnimationMixer(mrLee);
+  mixers.push(mrLeeMixer);
+  let mrLeeAction = null;
+  function setMrLeeMode(mode) {
+    const clip = mrLeeClips[mode];
+    if (!clip) return false;
+    const action = mrLeeMixer.clipAction(clip);
+    if (action === mrLeeAction && action.isRunning()) return true;
+    action.reset();
+    action.setLoop(T.LoopRepeat, Infinity);
+    action.clampWhenFinished = false;
+    if (mrLeeAction) mrLeeAction.fadeOut(0.2);
+    action.fadeIn(0.2).play();
+    mrLeeAction = action;
+    return true;
+  }
+  setMrLeeMode('idle');
+
+  const camera = new T.PerspectiveCamera(50, 1, 0.08, 40);
+  const player = { x: 0, z: 2.7, yaw: 0, pitch: -0.18 };
+  const focus = new T.Vector3();
+  const routeSpawn = { x: 1.2, z: -3.6 };
+  const mrLeeRoute = [
+    { x: 3.4, z: -7.0 }, { x: 3.0, z: -5.0 }, { x: 2.5, z: -3.3 },
+    { x: 1.65, z: -1.45 }, { x: 2.5, z: -3.3 }, { x: 3.0, z: -5.0 },
+  ];
+  let routeStarted = false;
+  let routeDialogueIndex = 0;
+  let auditionAccepted = false;
+  let mrLeePatrolling = false;
+  let mrLeeAware = false;
+  let mrLeePatrolIndex = 1;
+  let mrLeePatrolWait = 0;
+  let selectedCharacter = 'SooAh';
+  const standingCharacters = new Set();
+  const characterRoots = { SooAh: sooAh, Ted: tedRoot };
+  const sitClearance = { SooAh: { y: 0.04, z: 0 }, Ted: { y: 0, z: 0.12 } };
+  const characterMode = { SooAh: 'sitting', Ted: 'sitting' };
+  const standingReady = new Set();
+  const walkingCharacters = new Set();
+  const movementModes = {};
+  const fadingMovement = {};
+  // Root-motion stride distances are scaled to the game characters' one-metre height.
+  const walkSpeeds = { SooAh: 0.52, Ted: 1.01 };
+  const runSpeeds = { SooAh: 1.54, Ted: 3.21 };
+  const currentSpeeds = { ...walkSpeeds };
+  const turningCharacters = new Set();
+  const turningDirection = {};
+  const turnStates = {};
+  const turnConsumed = {};
+  const walkingDirection = {};
+  const walkingYaw = {};
+  const pendingMoves = {};
+  const standingPoses = {};
+  const standFinishHandlers = {};
+  const standRootTransitions = {};
+  const facingTargets = {};
+  const seatAnchors = { SooAh: { x: 0.24, z: 0.15 }, Ted: { x: -0.16, z: 0.11 } };
+  const standingAnchors = { SooAh: { x: 0.24, z: 0.32 }, Ted: { x: -0.16, z: 0.44 } };
+  const characterBodies = { SooAh: { radius: 0.32, height: 1.0 }, Ted: { radius: 0.32, height: 1.0 }, MrLee: { radius: 0.22, height: 1.6 } };
+  const benchScale = new T.Vector3();
+  const sooAhStandBounds = new T.Box3();
+  const sooAhStandMeshes = [];
+  sooAh.traverse((node) => { if (node.isSkinnedMesh) sooAhStandMeshes.push(node); });
+  const groundSooAhDuringStand = () => {
+    sooAh.updateMatrixWorld(true);
+    for (const mesh of sooAhStandMeshes) mesh.skeleton.update();
+    sooAh.position.y -= sooAhStandBounds.setFromObject(sooAh, true).min.y;
+    sooAh.updateMatrixWorld(true);
+  };
+  const tedStandBounds = new T.Box3();
+  const tedStandMeshes = [];
+  ted.traverse((node) => { if (node.isSkinnedMesh) tedStandMeshes.push(node); });
+  const groundTedDuringStand = () => {
+    tedRoot.updateMatrixWorld(true);
+    for (const mesh of tedStandMeshes) mesh.skeleton.update();
+    tedRoot.position.y -= tedStandBounds.setFromObject(tedRoot, true).min.y;
+    tedRoot.updateMatrixWorld(true);
+  };
+  const sittingDown = new Set();
+  const sitFinishHandlers = {};
+  let message = 'Select a character. Use E to stand and Q to sit at the bench.';
+
+  const dist = (x, z, point) => Math.hypot(x - point.x, z - point.z);
+  function placeAtBenchAnchor(name, anchor) {
+    const root = characterRoots[name];
+    const localY = bench.worldToLocal(root.position.clone()).y;
+    const position = bench.localToWorld(new T.Vector3(anchor.x, localY, anchor.z));
+    player.x += position.x - root.position.x;
+    player.z += position.z - root.position.z;
+    root.position.x = position.x;
+    root.position.z = position.z;
+  }
+
+  function benchPenetration(name, localX, localZ, localBottomY, collider, radius, height) {
+    const [halfX, halfY, halfZ] = collider.userData.halfExtents;
+    const center = collider.position;
+    if (localBottomY + height <= center.y - halfY || localBottomY >= center.y + halfY) return 0;
+    const overlapX = halfX + radius - Math.abs(localX - center.x);
+    const overlapZ = halfZ + radius - Math.abs(localZ - center.z);
+    return overlapX > 0 && overlapZ > 0 ? Math.min(overlapX, overlapZ) : 0;
+  }
+
+  function canMoveCharacterTo(name, fromX, fromZ, toX, toZ, bottomY, radius, height) {
+    const bodyScale = bench.getWorldScale(benchScale);
+    const localRadius = radius / Math.max(0.001, Math.min(Math.abs(bodyScale.x), Math.abs(bodyScale.z)));
+    const localHeight = height / Math.max(0.001, Math.abs(bodyScale.y));
+    for (const collider of benchColliders) {
+      const fromDepth = benchPenetration(name, fromX, fromZ, bottomY, collider, localRadius, localHeight);
+      const toDepth = benchPenetration(name, toX, toZ, bottomY, collider, localRadius, localHeight);
+      if (toDepth <= 0 || (fromDepth > 0 && toDepth <= fromDepth + 0.001)) continue;
+      return false;
+    }
+    return true;
+  }
+
+  function moveRootWithBenchCollision(name, root, desiredX, desiredZ) {
+    const body = characterBodies[name];
+    if (!body) return { x: desiredX, z: desiredZ };
+    bench.updateMatrixWorld(true);
+    const from = bench.worldToLocal(new T.Vector3(root.position.x, root.position.y, root.position.z));
+    const desired = bench.worldToLocal(new T.Vector3(desiredX, root.position.y, desiredZ));
+    const dx = desired.x - from.x;
+    const dz = desired.z - from.z;
+    let x = from.x;
+    let z = from.z;
+    if (Math.abs(dx) > 0.000001 && canMoveCharacterTo(name, from.x, from.z, x + dx, z, from.y, body.radius, body.height)) x += dx;
+    if (Math.abs(dz) > 0.000001 && canMoveCharacterTo(name, from.x, from.z, x, z + dz, from.y, body.radius, body.height)) z += dz;
+    const result = bench.localToWorld(new T.Vector3(x, from.y, z));
+    return { x: result.x, z: result.z };
+  }
+
+  function updateMrLeePatrol(dt) {
+    if (!mrLeePatrolling) return;
+    const actor = characterRoots[selectedCharacter];
+    const dx = actor.position.x - mrLeeRoot.position.x;
+    const dz = actor.position.z - mrLeeRoot.position.z;
+    const distance = Math.hypot(dx, dz);
+    const facingX = Math.sin(mrLeeRoot.rotation.y);
+    const facingZ = Math.cos(mrLeeRoot.rotation.y);
+    const facingDot = distance > 0.001 ? (facingX * dx + facingZ * dz) / distance : 1;
+    const turnToward = (x, z) => {
+      const target = Math.atan2(x - mrLeeRoot.position.x, z - mrLeeRoot.position.z);
+      const delta = Math.atan2(Math.sin(target - mrLeeRoot.rotation.y), Math.cos(target - mrLeeRoot.rotation.y));
+      mrLeeRoot.rotation.y += delta * Math.min(1, dt * 4.5);
+    };
+
+    if (mrLeeAware) {
+      if (distance > 2.8) {
+        mrLeeAware = false;
+        mrLeePatrolWait = 0.6;
+        message = 'Mr. Lee looks back toward the cafe.';
+      } else {
+        setMrLeeMode('idle');
+        turnToward(actor.position.x, actor.position.z);
+        return;
+      }
+    } else if (distance < 2.1 && facingDot > 0.15) {
+      mrLeeAware = true;
+      setMrLeeMode('idle');
+      turnToward(actor.position.x, actor.position.z);
+      message = 'Mr. Lee spots you. Back off and try another route.';
+      return;
+    }
+
+    if (mrLeePatrolWait > 0) {
+      mrLeePatrolWait = Math.max(0, mrLeePatrolWait - dt);
+      setMrLeeMode('idle');
+      return;
+    }
+
+    const waypoint = mrLeeRoute[mrLeePatrolIndex];
+    const toX = waypoint.x - mrLeeRoot.position.x;
+    const toZ = waypoint.z - mrLeeRoot.position.z;
+    const remaining = Math.hypot(toX, toZ);
+    if (remaining < 0.12) {
+      mrLeePatrolIndex = (mrLeePatrolIndex + 1) % mrLeeRoute.length;
+      mrLeePatrolWait = 1.1;
+      setMrLeeMode('idle');
+      return;
+    }
+    turnToward(waypoint.x, waypoint.z);
+    const turn = Math.atan2(Math.sin(Math.atan2(toX, toZ) - mrLeeRoot.rotation.y), Math.cos(Math.atan2(toX, toZ) - mrLeeRoot.rotation.y));
+    if (Math.abs(turn) > 0.12) {
+      setMrLeeMode('idle');
+      return;
+    }
+    const step = Math.min(remaining, 0.82 * dt);
+    const next = moveRootWithBenchCollision('MrLee', mrLeeRoot,
+      mrLeeRoot.position.x + (toX / remaining) * step,
+      mrLeeRoot.position.z + (toZ / remaining) * step);
+    mrLeeRoot.position.x = next.x;
+    mrLeeRoot.position.z = next.z;
+    setMrLeeMode('walk');
+  }
+
+  function saveStandingPose(name) {
+    const pose = new Map();
+    characterRoots[name].traverse((node) => {
+      if (node.isBone) pose.set(node.name, {
+        position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone(),
+      });
+    });
+    standingPoses[name] = pose;
+  }
+
+  function restoreStandingPose(name) {
+    const pose = standingPoses[name];
+    if (!pose) return;
+    characterRoots[name].traverse((node) => {
+      const saved = pose.get(node.name);
+      if (!saved) return;
+      node.position.copy(saved.position);
+      node.quaternion.copy(saved.quaternion);
+      node.scale.copy(saved.scale);
+    });
+  }
+
+  function startRoute() {
+    if (routeStarted) return true;
+    const name = selectedCharacter;
+    const root = characterRoots[name];
+    const mixer = characterMixers[name];
+    const clip = sitToStandClips[name];
+    if (!root || !mixer || !clip) return false;
+    routeStarted = true;
+    root.position.set(routeSpawn.x, 0, routeSpawn.z);
+    root.rotation.y = Math.atan2(-routeSpawn.x, -routeSpawn.z);
+    sitClearance[name] = { y: 0, z: 0 };
+    sittingCharacters.delete(name);
+    standingReady.delete(name);
+    standingCharacters.add(name);
+    characterMode[name] = 'standingUp';
+    player.x = routeSpawn.x;
+    player.z = routeSpawn.z;
+    player.yaw = Math.atan2(routeSpawn.x, routeSpawn.z);
+    mrLeePatrolling = true;
+    mrLeeAware = false;
+    mrLeePatrolIndex = 1;
+    mrLeePatrolWait = 3.2;
+    setMrLeeMode('idle');
+    const action = playClip(name, clip, { loop: false, fade: 0.16 });
+    if (!action) return false;
+    action.timeScale = name === 'SooAh' ? sooAhStandSpeed : 1;
+    const onFinished = (event) => {
+      if (event.action !== action) return;
+      mixer.removeEventListener('finished', onFinished);
+      delete standFinishHandlers[name];
+      if (name === 'SooAh') groundSooAhDuringStand();
+      if (name === 'Ted') groundTedDuringStand();
+      saveStandingPose(name);
+      standingReady.add(name);
+      characterMode[name] = 'standingIdle';
+    };
+    standFinishHandlers[name] = onFinished;
+    mixer.addEventListener('finished', onFinished);
+    message = `${name === 'Ted' ? 'Ted' : 'Soo-ah'} heads toward the bench.`;
+    return true;
+  }
+
+  function beginTurn(name, direction, angle = null) {
+    const mixer = characterMixers[name];
+    const root = characterRoots[name];
+    const clip = turnClips[name]?.[direction];
+    const measured = turnAngles[name]?.[direction] ?? Math.PI / 2;
+    const amount = Math.abs(angle ?? Math.PI / 2);
+    const action = playClip(name, clip, { loop: false, fade: 0.12 });
+    const timeScale = measured / Math.max(amount, 0.1);
+    if (action) action.timeScale = timeScale;
+    walkingCharacters.delete(name);
+    const turnAngle = direction === 'left' ? -amount : amount;
+    turnStates[name] = {
+      startYaw: root.rotation.y,
+      endYaw: root.rotation.y + turnAngle,
+      elapsed: 0,
+      duration: Math.max((clip?.duration ?? 0.45) / timeScale, 0.25),
+      direction,
+    };
+    delete movementModes[name];
+    turningCharacters.add(name);
+    turningDirection[name] = direction;
+    delete turnConsumed[name];
+    characterMode[name] = direction === 'left' ? 'turningLeft' : 'turningRight';
+  }
+
+  const nearest = () => {
+    const targets = [
+      selectedCharacter === 'SooAh'
+        ? { id: 'ted', point: characterRoots.Ted.position, radius: 1.4 }
+        : { id: 'sooAh', point: characterRoots.SooAh.position, radius: 1.4 },
+      { id: 'lee', point: mrLeeRoot.position, radius: 1.8 },
+    ];
+    return targets
+      .map((target) => ({ ...target, distance: dist(player.x, player.z, target.point) }))
+      .filter((target) => target.distance < target.radius)
+      .sort((a, b) => a.distance - b.distance)[0]?.id ?? null;
+  };
+
+  function move({ forward = 0, strafe = 0, dt = 0, fast = false }) {
+    const speed = fast ? 4.8 : 3.1;
+    const dx = (-Math.sin(player.yaw) * forward + Math.cos(player.yaw) * strafe) * speed * dt;
+    const dz = (-Math.cos(player.yaw) * forward - Math.sin(player.yaw) * strafe) * speed * dt;
+    const nx = clamp(player.x + dx, -4, 4);
+    const nz = clamp(player.z + dz, -7, 5);
+    const nearChair = Math.hypot(nx, nz - 0.17) < 0.75;
+    player.x = nx;
+    player.z = nearChair ? nz + (nz < 0.17 ? -1 : 1) * 0.05 : nz;
+  }
+
+  function walkSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
+    const name = selectedCharacter;
+    const mixer = characterMixers[name];
+    if (!mixer || emotionalStates[name]?.blocksMovement) return false;
+    if (!standingCharacters.has(name) || sittingDown.has(name)) return false;
+    const useLookBehind = run && name === 'SooAh' && lookBehindRun;
+    if (useLookBehind && !lookBehindRunClip) {
+      ensureClip('SooAhLookBehindRun').catch((error) => console.error(error));
+    } else if (run && !runningClips[name]) {
+      ensureClip(name === 'SooAh' ? 'SooAhRun' : 'TedRun').catch((error) => console.error(error));
+    }
+    const root = characterRoots[name];
+    const inputLength = Math.hypot(directionX, directionZ);
+    const hasInput = inputLength > 0.01;
+    if (!hasInput) {
+      delete pendingMoves[name];
+      if (walkingCharacters.has(name)) {
+        characterActions[name]?.fadeOut(0.18);
+        fadingMovement[name] = 0.18;
+        walkingCharacters.delete(name);
+        delete movementModes[name];
+        characterMode[name] = 'standingIdle';
+      }
+      delete turnConsumed[name];
+      return false;
+    }
+    pendingMoves[name] = { x: directionX / inputLength, z: directionZ / inputLength };
+    if (!standingReady.has(name)) return false;
+    if (turnStates[name]) return true;
+    const direction = pendingMoves[name];
+    // The imported Mixamo model faces local +Z; keep its yaw aligned with the world destination.
+    const targetYaw = Math.atan2(direction.x, direction.z);
+    delete facingTargets[name];
+    const turnDelta = Math.atan2(Math.sin(targetYaw - root.rotation.y), Math.cos(targetYaw - root.rotation.y));
+    const turnSide = turnDelta < 0 ? 'left' : 'right';
+    const measuredAngle = turnAngles[name][turnSide];
+    if (Math.abs(turnDelta) >= Math.min(measuredAngle * 0.8, Math.PI / 4)) {
+      if (!turnClips[name][turnSide]) {
+        ensureClip(`${name}Turn${turnSide === 'left' ? 'Left' : 'Right'}`).catch((error) => console.error(error));
+        return true;
+      }
+      const turnStep = Math.min(Math.abs(turnDelta), Math.PI / 2);
+      beginTurn(name, turnSide, turnStep);
+      return true;
+    }
+    if (Math.abs(turnDelta) > 0.02) {
+      root.rotation.y += turnDelta * Math.min(1, dt * 5);
+      return true;
+    }
+    root.rotation.y = targetYaw;
+    const useLookBehindClip = useLookBehind && Boolean(lookBehindRunClip);
+    const desiredMode = run && (runningClips[name] || useLookBehindClip)
+      ? useLookBehindClip ? 'lookingBehindRunning' : 'running'
+      : 'walking';
+    const clip = desiredMode === 'lookingBehindRunning' ? lookBehindRunClip
+      : desiredMode === 'running' ? runningClips[name] : walkClipFor(name);
+    const targetSpeed = desiredMode === 'walking' ? walkSpeeds[name] : runSpeeds[name];
+    currentSpeeds[name] += (targetSpeed - currentSpeeds[name]) * Math.min(1, dt * 5);
+    const step = currentSpeeds[name] * dt;
+    const oldX = root.position.x;
+    const oldZ = root.position.z;
+    const next = moveRootWithBenchCollision(name, root,
+      clamp(oldX + direction.x * step, -4, 4), clamp(oldZ + direction.z * step, -7, 5));
+    if (Math.hypot(next.x - oldX, next.z - oldZ) < 0.0005) {
+      if (walkingCharacters.has(name)) {
+        characterActions[name]?.fadeOut(0.12);
+        fadingMovement[name] = 0.12;
+        walkingCharacters.delete(name);
+      }
+      delete movementModes[name];
+      characterMode[name] = 'standingIdle';
+      return true;
+    }
+    if (movementModes[name] !== desiredMode) {
+      playClip(name, clip, { loop: true, fade: 0.18 });
+      movementModes[name] = desiredMode;
+      walkingCharacters.add(name);
+      characterMode[name] = desiredMode;
+    }
+    root.position.x = clamp(next.x, -4, 4);
+    root.position.z = clamp(next.z, -7, 5);
+    player.x += root.position.x - oldX;
+    player.z += root.position.z - oldZ;
+    return true;
+  }
+
+  function look(dx, dy) {
+    player.yaw -= dx * 0.0022;
+    player.pitch = clamp(player.pitch - dy * 0.0018, -0.85, 0.48);
+  }
+
+  function interact() {
+    const target = nearest();
+    if (!target) return false;
+    const isBenchFriend = selectedCharacter === 'Ted' ? target === 'sooAh' : target === 'ted';
+    if (routeStarted && isBenchFriend) {
+      if (mrLeeAware) {
+        message = 'Mr. Lee is watching. Move out of sight and wait before you talk.';
+        return true;
+      }
+      mrLeePatrolling = false;
+      setMrLeeMode('idle');
+      const lines = selectedCharacter === 'Ted'
+        ? [
+          'Ted: Nova is holding auditions. You should try with me.',
+          'Soo-ah: My dad told me not to see you. He wants me focused on studying.',
+          'Ted: You helped me with Korean when school felt lonely. Let me support something you want.',
+          'Soo-ah: All right. I will go to the audition.',
+        ]
+        : [
+          'Soo-ah: I said I would always help you with Korean.',
+          'They share mochi and renew their promise.',
+          'Ted: Nova is holding auditions. You should try for one too.',
+          'Soo-ah: I am scared to tell Dad, but I will go.',
+        ];
+      if (routeDialogueIndex < lines.length) {
+        message = lines[routeDialogueIndex++];
+        if (routeDialogueIndex === lines.length) {
+          auditionAccepted = true;
+          mrLeePatrolling = false;
+          setMrLeeMode('idle');
+        }
+      } else {
+        message = auditionAccepted ? 'They agree to face the audition together.' : lines[0];
+      }
+      return true;
+    }
+    if (target === 'lee') {
+      message = 'Mr. Lee smiles as the two friends talk.';
+    } else if (target === 'sooAh') {
+      message = 'Soo-ah smiles at Ted.';
+    } else if (target === 'ted') {
+      message = 'Ted smiles at Soo-ah.';
+    }
+    startSittingTalk(selectedCharacter);
+    return true;
+  }
+
+  function startSittingTalk(name) {
+    if (!sittingCharacters.has(name) || emotionalStates[name]) return false;
+    if (!sittingTalkClips[name]) {
+      ensureClip(name === 'SooAh' ? 'SooAhSittingTalk' : 'TedSittingTalk')
+        .then(() => startSittingTalk(name)).catch((error) => console.error(error));
+      return true;
+    }
+    sittingTalkTimers[name] = 4.3;
+    characterMode[name] = 'sittingTalking';
+    playClip(name, inPlaceFbxWalk(sittingTalkClips[name]), { loop: true, fade: 0.18 });
+    return true;
+  }
+
+  function selectCharacter(name) {
+    if (name === 'SooAh' || name === 'Ted') selectedCharacter = name;
+  }
+
+  async function setWalkingVariant(name = 'Ted', variant = 'folder') {
+    if (name !== 'Ted' || !['folder', 'alternative'].includes(variant) || walkingCharacters.has(name)) return false;
+    if (variant === 'alternative') await ensureClip('TedWalkAlternative');
+    activeWalkVariant.Ted = variant;
+    return true;
+  }
+
+  function triggerNervous(name = selectedCharacter) {
+    if (walkingCharacters.has(name) || turningCharacters.has(name)
+      || turnStates[name] || sittingDown.has(name) || standFinishHandlers[name]
+      || emotionalStates[name] || characterMode[name] === 'sittingTalking'
+      || (!standingReady.has(name) && !sittingCharacters.has(name))) return false;
+    if (!nervousClips[name]) {
+      ensureClip(name === 'SooAh' ? 'SooAhNervous' : 'TedNervous')
+        .then(() => triggerNervous(name)).catch((error) => console.error(error));
+      return true;
+    }
+    const clip = inPlaceFbxWalk(nervousClips[name]);
+    emotionalStates[name] = { kind: 'nervous', remaining: clip.duration, blocksMovement: true };
+    characterMode[name] = 'nervous';
+    playClip(name, clip, { loop: false, fade: 0.2 });
+    return true;
+  }
+
+  function triggerTerrified(name = selectedCharacter, duration = null) {
+    if (turningCharacters.has(name) || sittingDown.has(name) || standFinishHandlers[name]
+      || (!standingReady.has(name) && !sittingCharacters.has(name) && !walkingCharacters.has(name))) return false;
+    if (!terrifiedClips[name]) {
+      ensureClip(name === 'SooAh' ? 'SooAhTerrified' : 'TedTerrified')
+        .then(() => triggerTerrified(name, duration)).catch((error) => console.error(error));
+      return true;
+    }
+    delete pendingMoves[name];
+    sittingTalkTimers[name] = 0;
+    delete turnStates[name];
+    turningCharacters.delete(name);
+    walkingCharacters.delete(name);
+    delete movementModes[name];
+    const clip = inPlaceFbxWalk(terrifiedClips[name]);
+    emotionalStates[name] = { kind: 'terrified', remaining: Math.max(0.1, duration ?? clip.duration), blocksMovement: true };
+    characterMode[name] = 'terrified';
+    playClip(name, clip, { loop: false, fade: 0.24 });
+    return true;
+  }
+
+  function clearEmotion(name = selectedCharacter) {
+    if (!emotionalStates[name]) return false;
+    delete emotionalStates[name];
+    restoreIdle(name);
+    return true;
+  }
+
+  function setLookBehindRun(active = true) {
+    lookBehindRun = Boolean(active);
+    return true;
+  }
+
+  function standSelected() {
+    const name = selectedCharacter;
+    if (!canStandSelected()) return false;
+    const mixer = characterMixers[name];
+    const clip = sitToStandClips[name];
+    if (!mixer || !clip) return false;
+    if (standFinishHandlers[name]) {
+      mixer.removeEventListener('finished', standFinishHandlers[name]);
+      delete standFinishHandlers[name];
+      delete standRootTransitions[name];
+    }
+    if (sitFinishHandlers[name]) {
+      mixer.removeEventListener('finished', sitFinishHandlers[name]);
+      delete sitFinishHandlers[name];
+    }
+    standingReady.delete(name);
+    walkingCharacters.delete(name);
+    turningCharacters.delete(name);
+    sittingCharacters.delete(name);
+    sittingTalkTimers[name] = 0;
+    delete turnStates[name];
+    delete turningDirection[name];
+    delete turnConsumed[name];
+    delete walkingDirection[name];
+    delete walkingYaw[name];
+    delete facingTargets[name];
+    characterRoots[name].position.y -= sitClearance[name].y;
+    characterRoots[name].position.z -= sitClearance[name].z;
+    sitClearance[name] = { y: 0, z: 0 };
+    const startPosition = bench.worldToLocal(characterRoots[name].position.clone());
+    characterMode[name] = 'standingUp';
+    const standSpeed = name === 'SooAh' ? sooAhStandSpeed : 1;
+    const action = playClip(name, clip, { loop: false, fade: 0.18 });
+    if (!action) return false;
+    action.timeScale = standSpeed;
+    if (name === 'SooAh' || name === 'Ted') {
+      standRootTransitions[name] = {
+        startX: startPosition.x,
+        startZ: startPosition.z,
+        elapsed: 0,
+        duration: Math.max(clip.duration / standSpeed, 0.001),
+      };
+    }
+    const onFinished = (event) => {
+      if (event.action !== action) return;
+      mixer.removeEventListener('finished', onFinished);
+      delete standFinishHandlers[name];
+      if (name === 'SooAh') groundSooAhDuringStand();
+      if (name === 'Ted') {
+        groundTedDuringStand();
+        characterRoots[name].rotation.y = 0;
+      }
+      delete standRootTransitions[name];
+      placeAtBenchAnchor(name, standingAnchors[name]);
+      saveStandingPose(name);
+      standingReady.add(name);
+      characterMode[name] = 'standingIdle';
+    };
+    standFinishHandlers[name] = onFinished;
+    mixer.addEventListener('finished', onFinished);
+    standingCharacters.add(name);
+    message = `${selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah'} stands up.`;
+    return true;
+  }
+
+  function canSitSelected() {
+    if (!standingCharacters.has(selectedCharacter) || !standingReady.has(selectedCharacter)
+      || walkingCharacters.has(selectedCharacter) || turningCharacters.has(selectedCharacter)
+      || turnStates[selectedCharacter] || emotionalStates[selectedCharacter] || sittingDown.has(selectedCharacter)) return false;
+    const name = selectedCharacter;
+    const root = characterRoots[name];
+    return dist(root.position.x, root.position.z, seatAnchors[name]) <= 0.7;
+  }
+
+  function canStandSelected() {
+    const name = selectedCharacter;
+    if (!sittingCharacters.has(name) || !['sitting', 'sittingTalking'].includes(characterMode[name])
+      || standingCharacters.has(name) || emotionalStates[name] || sittingDown.has(name) || !characterMixers[name]) return false;
+    const root = characterRoots[name];
+    return dist(root.position.x, root.position.z, seatAnchors[name]) <= 0.7;
+  }
+
+  function sitSelected() {
+    if (!canSitSelected()) return false;
+    const name = selectedCharacter;
+    const mixer = characterMixers[name];
+    const tedSeatedPose = name === 'Ted' ? sittingTalkClips.Ted ?? sittingClips.Ted : null;
+    const clip = name === 'Ted' ? tedSeatedPose : standToSitClips[name];
+    if (!mixer || !clip) return false;
+    if (standFinishHandlers[name]) {
+      mixer.removeEventListener('finished', standFinishHandlers[name]);
+      delete standFinishHandlers[name];
+    }
+    standingReady.delete(name);
+    walkingCharacters.delete(name);
+    turningCharacters.delete(name);
+    sittingCharacters.delete(name);
+    sittingTalkTimers[name] = 0;
+    delete turnStates[name];
+    delete turningDirection[name];
+    delete turnConsumed[name];
+    delete walkingDirection[name];
+    delete walkingYaw[name];
+    delete pendingMoves[name];
+    facingTargets[name] = 0;
+    placeAtBenchAnchor(name, {
+      x: seatAnchors[name].x,
+      z: seatAnchors[name].z + (name === 'Ted' ? 0.12 : 0),
+    });
+    if (name === 'SooAh') {
+      characterRoots[name].position.y += 0.04;
+      sitClearance[name] = { y: 0.04, z: 0 };
+    }
+    if (name === 'Ted') {
+      characterRoots[name].position.y -= 0.12;
+      sitClearance[name] = { y: -0.12, z: 0 };
+    }
+    characterMode[name] = name === 'Ted' ? 'sitting' : 'sittingDown';
+    const action = playClip(name, clip, { loop: name === 'Ted', fade: name === 'Ted' ? 0.3 : 0.18 });
+    if (!action) return false;
+    action.timeScale = name === 'SooAh' ? sooAhSitSpeed : 1;
+    if (name === 'Ted') {
+      standingCharacters.delete(name);
+      sittingCharacters.add(name);
+      message = 'Ted sits back down.';
+      return true;
+    }
+    sittingDown.add(name);
+    const onFinished = (event) => {
+      if (event.action !== action) return;
+      mixer.removeEventListener('finished', onFinished);
+      delete sitFinishHandlers[name];
+      sittingDown.delete(name);
+      standingCharacters.delete(name);
+      sittingCharacters.add(name);
+      characterMode[name] = 'sitting';
+      playClip(name, sittingClips[name], { loop: true, fade: 0.2 });
+    };
+    sitFinishHandlers[name] = onFinished;
+    mixer.addEventListener('finished', onFinished);
+    message = `${name === 'Ted' ? 'Ted' : 'Soo-ah'} sits back down.`;
+    return true;
+  }
+
+  function hud() {
+    const target = nearest();
+    const label = selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah';
+    const mode = characterMode[selectedCharacter];
+    const task = sittingDown.has(selectedCharacter) ? `${label} is sitting down…`
+      : mode === 'sittingTalking' ? `${label} is talking from the bench`
+        : mode === 'nervous' ? `${label} is looking around nervously…`
+          : mode === 'terrified' ? `${label} is frightened…`
+            : mode === 'running' || mode === 'lookingBehindRunning' ? `${label} running · arrows steer`
+      : standingCharacters.has(selectedCharacter)
+        ? standingReady.has(selectedCharacter) ? `${label} standing · arrows turn + walk · Q sit at bench` : `${label} is standing up…`
+        : `${label} selected · E stand at bench`;
+    const prompt = target === 'sooAh' ? 'F · Talk to Soo-ah'
+      : target === 'ted' ? 'F · Talk to Ted'
+        : target === 'lee' ? 'F · Talk to Mr. Lee' : '';
+    return { task, prompt, message, selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
+  }
+
+  function update(t, dt) {
+    focus.set(player.x, 1.48, player.z);
+    camera.position.copy(focus);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
+    updateMrLeePatrol(dt);
+    for (const mixer of mixers) mixer.update(dt);
+    if (standRootTransitions.SooAh) groundSooAhDuringStand();
+    if (standRootTransitions.Ted) groundTedDuringStand();
+    for (const [name, transition] of Object.entries(standRootTransitions)) {
+      transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
+      const progress = transition.elapsed / transition.duration;
+      const eased = progress * progress * (3 - 2 * progress);
+      const target = standingAnchors[name];
+      placeAtBenchAnchor(name, {
+        x: transition.startX + (target.x - transition.startX) * eased,
+        z: transition.startZ + (target.z - transition.startZ) * eased,
+      });
+      if (name === 'SooAh') characterRoots[name].position.y += 0.05 * (1 - eased);
+      if (name === 'Ted') characterRoots[name].position.y += 0.07 * (1 - eased);
+    }
+    for (const [name, state] of Object.entries(turnStates)) {
+      state.elapsed = Math.min(state.duration, state.elapsed + dt);
+      const progress = state.elapsed / state.duration;
+      const eased = progress * progress * (3 - 2 * progress);
+      const root = characterRoots[name];
+      root.rotation.y = state.startYaw + (state.endYaw - state.startYaw) * eased;
+      if (progress >= 1) {
+        root.rotation.y = state.endYaw;
+        const mixer = characterMixers[name];
+        mixer.stopAllAction();
+        mixer.update(0);
+        restoreStandingPose(name);
+        delete turnStates[name];
+        turningCharacters.delete(name);
+        delete turningDirection[name];
+        turnConsumed[name] = state.direction;
+        delete movementModes[name];
+        characterMode[name] = 'standingIdle';
+        characterActions[name] = null;
+      }
+    }
+    for (const name of Object.keys(sittingTalkTimers)) {
+      if (sittingTalkTimers[name] <= 0) continue;
+      sittingTalkTimers[name] = Math.max(0, sittingTalkTimers[name] - dt);
+      if (sittingTalkTimers[name] === 0 && characterMode[name] === 'sittingTalking') restoreIdle(name);
+    }
+    for (const [name, state] of Object.entries(emotionalStates)) {
+      state.remaining = Math.max(0, state.remaining - dt);
+      if (state.remaining === 0) clearEmotion(name);
+    }
+    for (const [name, remaining] of Object.entries(fadingMovement)) {
+      const next = remaining - dt;
+      if (next > 0) {
+        fadingMovement[name] = next;
+        continue;
+      }
+      delete fadingMovement[name];
+      const mixer = characterMixers[name];
+      mixer?.stopAllAction();
+      mixer?.update(0);
+      restoreStandingPose(name);
+      characterActions[name] = null;
+    }
+    for (const [name, target] of Object.entries(facingTargets)) {
+      const root = characterRoots[name];
+      const turn = Math.atan2(Math.sin(target - root.rotation.y), Math.cos(target - root.rotation.y));
+      root.rotation.y += turn * Math.min(1, dt * 8);
+      if (Math.abs(turn) < 0.01) {
+        root.rotation.y = target;
+        delete facingTargets[name];
+      }
+    }
+    return hud();
+  }
+
+  return { scene, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, startRoute, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player };
+}

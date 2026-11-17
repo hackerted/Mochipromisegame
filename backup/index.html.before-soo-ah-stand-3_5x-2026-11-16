@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e7d7c4">
+  <title>A Mochi Promise</title>
+  <style>
+    :root { color-scheme: light; font-family: ui-rounded, "Avenir Next", system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #d9e4f3; }
+    canvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+    .hud { position: fixed; inset: 0; pointer-events: none; color: #fffaf1; text-shadow: 0 2px 12px #1a201d88; }
+    .topbar { position: absolute; left: 22px; top: 18px; display: flex; gap: 12px; align-items: flex-start; }
+    .card { border: 1px solid #ffffff42; background: #25332ed6; backdrop-filter: blur(12px); border-radius: 16px; padding: 14px 17px; box-shadow: 0 12px 35px #17201926; }
+    .brand { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #eec8cf; margin-bottom: 5px; }
+    #task { max-width: 320px; font-size: 15px; line-height: 1.45; }
+    .bottom { position: absolute; inset-inline: 0; bottom: 22px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    #prompt { min-height: 46px; padding: 12px 19px; border-radius: 15px; background: #25332edb; border: 1px solid #ffffff55; font-weight: 700; opacity: 0; transform: translateY(5px); transition: .16s ease; }
+    #prompt.visible { opacity: 1; transform: none; }
+    #hint { padding: 8px 12px; font-size: 12px; color: #fffaf1c9; background: #25332e75; border-radius: 999px; }
+    #toast { position: absolute; left: 50%; bottom: 105px; transform: translate(-50%, 10px); max-width: min(600px, calc(100vw - 36px)); padding: 13px 18px; border-radius: 14px; background: #fff9edee; color: #3c4238; text-shadow: none; line-height: 1.45; text-align: center; opacity: 0; transition: .2s ease; }
+    #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+    #crosshair { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: #fff9eddd; box-shadow: 0 0 0 1px #34413666; }
+    #startScreen { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: 20px; background: linear-gradient(110deg, #27362dba, #343b38a1), url('') center / cover; color: #fffaf1; transition: opacity .35s ease; }
+    #startScreen.hidden { opacity: 0; pointer-events: none; }
+    .intro { width: min(510px, 100%); padding: clamp(24px, 6vw, 45px); border: 1px solid #ffffff4a; border-radius: 25px; background: #26342fe8; box-shadow: 0 28px 90px #111b1970; }
+    .eyebrow { color: #f2c4ce; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; }
+    h1 { margin: 11px 0 12px; font: 500 clamp(35px, 7vw, 54px)/1.02 Georgia, serif; letter-spacing: -.035em; }
+    .intro p { color: #f7eee4d9; line-height: 1.65; margin: 0 0 20px; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; margin: 23px 0 25px; color: #fffaf1d7; font-size: 13px; }
+    .play-as { display: flex; gap: 9px; margin: 16px 0; }
+    .play-as button { width: auto; flex: 1; padding: 10px; background: #f4eadf; color: #39463d; }
+    .play-as button[aria-pressed="true"] { background: #e9b7c3; }
+    kbd { display: inline-block; min-width: 27px; margin-right: 6px; padding: 4px 7px; border-radius: 7px; background: #f5e5d5; color: #39463d; text-align: center; font: 700 11px system-ui; }
+    button { border: 0; border-radius: 12px; background: #e9b7c3; color: #352f2c; padding: 13px 19px; width: 100%; font: 700 14px system-ui; cursor: pointer; transition: transform .15s, background .15s; }
+    button:hover { background: #f3c7d0; transform: translateY(-1px); }
+    #loading { margin-top: 12px; min-height: 17px; font-size: 12px; color: #f5e8dbad; }
+    #error { display: none; margin-top: 12px; color: #ffd0cf; font-size: 13px; line-height: 1.45; }
+    @media (max-width: 560px) { .topbar { left: 12px; top: 12px; } #task { max-width: calc(100vw - 106px); font-size: 13px; } .bottom { bottom: 15px; } }
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <canvas id="game" aria-label="Three-dimensional character preview"></canvas>
+  <section id="startScreen" aria-label="Game introduction">
+    <div class="intro">
+      <div class="eyebrow">A small story beneath the blossoms</div>
+      <h1>A Mochi<br>Promise</h1>
+      <p>After school, Soo-ah and Ted talk on the wooden park chair while Mr. Lee watches nearby. Choose who to play as and try the sit and stand animations.</p>
+      <div class="eyebrow">Play as</div>
+      <div class="play-as"><button id="playSooAh" aria-pressed="true">Soo-ah</button><button id="playTed" aria-pressed="false">Ted</button></div>
+      <div class="controls"><div><kbd>WASD</kbd> Move camera</div><div><kbd>DRAG</kbd> Look around</div><div><kbd>F</kbd> Talk</div><div><kbd>E</kbd> Stand at the bench</div><div><kbd>Q</kbd> Sit at the bench</div><div><kbd>↑ ↓ ← →</kbd> Turn and walk</div><div><kbd>SHIFT + ↑ ↓ ← →</kbd> Run</div></div>
+      <button id="startButton" disabled>Loading characters and movement…</button>
+      <div id="loading">Loading characters and movement animations…</div>
+      <div id="error"></div>
+    </div>
+  </section>
+  <main class="hud" aria-live="polite">
+    <div class="topbar">
+      <div class="card"><div class="brand">A Mochi Promise</div><div id="task">E stands and Q sits at the bench.</div></div>
+    </div>
+    <div id="crosshair"></div>
+    <div class="bottom"><div id="prompt"></div><div id="hint">Arrows move · Shift + arrows run · E stand · Q sit · F talk · WASD camera</div></div>
+    <div id="toast"></div>
+  </main>
+  <script type="module">
+    import * as THREE from 'three';
+    import { createScene } from './src/scene.js?v=171';
+
+    const canvas = document.querySelector('#game');
+    const startScreen = document.querySelector('#startScreen');
+    const startButton = document.querySelector('#startButton');
+    const loading = document.querySelector('#loading');
+    const errorBox = document.querySelector('#error');
+    const task = document.querySelector('#task');
+    const prompt = document.querySelector('#prompt');
+    const toast = document.querySelector('#toast');
+    const playSooAh = document.querySelector('#playSooAh');
+    const playTed = document.querySelector('#playTed');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(2);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+
+    let game;
+    let selectedCharacter = 'SooAh';
+    let lastMessage = '';
+    let shownMessageAt = 0;
+    let gameStarted = false;
+    let dragLook = false;
+    const keys = new Set();
+    const clock = new THREE.Clock();
+
+    function chooseCharacter(name) {
+      selectedCharacter = name;
+      playSooAh.setAttribute('aria-pressed', String(name === 'SooAh'));
+      playTed.setAttribute('aria-pressed', String(name === 'Ted'));
+      game?.selectCharacter(name);
+    }
+    playSooAh.addEventListener('click', () => chooseCharacter('SooAh'));
+    playTed.addEventListener('click', () => chooseCharacter('Ted'));
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight, false);
+      if (game?.camera) {
+        game.camera.aspect = innerWidth / innerHeight;
+        game.camera.updateProjectionMatrix();
+      }
+    }
+
+    function syncHud() {
+      const state = game.hud();
+      task.textContent = state.task;
+      prompt.textContent = state.prompt;
+      prompt.classList.toggle('visible', Boolean(state.prompt));
+      if (state.message !== lastMessage) {
+        lastMessage = state.message;
+        toast.textContent = state.message;
+        toast.classList.add('visible');
+        shownMessageAt = performance.now();
+      }
+      if (performance.now() - shownMessageAt > 4300) toast.classList.remove('visible');
+    }
+
+    try {
+      game = await createScene({ THREE, renderer });
+      game.selectCharacter(selectedCharacter);
+      resize();
+      window.addEventListener('resize', resize);
+      loading.textContent = 'The character scene is ready.';
+      startButton.disabled = false;
+      startButton.textContent = 'Begin the promise';
+      syncHud();
+
+      function frame() {
+        requestAnimationFrame(frame);
+        const dt = Math.min(clock.getDelta(), 0.04);
+        if (gameStarted) {
+          const forward = Number(keys.has('w')) - Number(keys.has('s'));
+          const strafe = Number(keys.has('d')) - Number(keys.has('a'));
+          game.move({ forward, strafe, dt, fast: keys.has('shift') });
+          const walkForward = Number(keys.has('arrowup')) - Number(keys.has('arrowdown'));
+          const walkRight = Number(keys.has('arrowright')) - Number(keys.has('arrowleft'));
+          const cameraYaw = game.player.yaw;
+          const directionX = -Math.sin(cameraYaw) * walkForward + Math.cos(cameraYaw) * walkRight;
+          const directionZ = -Math.cos(cameraYaw) * walkForward - Math.sin(cameraYaw) * walkRight;
+          game.walkSelected({ directionX, directionZ, dt, run: keys.has('shift') });
+        }
+        game.update(clock.elapsedTime, dt);
+        syncHud();
+        renderer.render(game.scene, game.camera);
+      }
+      frame();
+    } catch (error) {
+      console.error(error);
+      loading.textContent = 'The grove could not be loaded.';
+      errorBox.style.display = 'block';
+      errorBox.textContent = 'Please launch this folder from a local web server and check your internet connection for the Three.js library. ' + (error?.message || '');
+    }
+
+    function begin() {
+      gameStarted = true;
+      startScreen.classList.add('hidden');
+      canvas.focus();
+    }
+    startButton.addEventListener('click', begin);
+    canvas.addEventListener('click', () => { if (!gameStarted) begin(); });
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      keys.add(key);
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+      if (key === 'e' && !event.repeat && game && gameStarted && game.canStandSelected()) {
+        game.standSelected();
+        syncHud();
+      }
+      if (key === 'q' && !event.repeat && game && gameStarted && game.canSitSelected()) {
+        game.sitSelected();
+        syncHud();
+      }
+      if (key === 'f' && !event.repeat && game && gameStarted) {
+        game.interact();
+        syncHud();
+      }
+    });
+    window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
+    document.addEventListener('mousemove', (event) => {
+      if (game && gameStarted && (document.pointerLockElement === canvas || dragLook)) game.look(event.movementX, event.movementY);
+    });
+    document.addEventListener('mouseup', () => { dragLook = false; });
+    canvas.addEventListener('pointerdown', () => { if (gameStarted) dragLook = true; });
+    canvas.addEventListener('pointerup', () => { dragLook = false; });
+  </script>
+</body>
+</html>
