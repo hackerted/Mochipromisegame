@@ -35,7 +35,7 @@ Both routes converge on the same immediate outcome: Soo-ah will attend the audit
 
 ## Main gameplay loop
 
-Choose a perspective → move through the cafe/park space → read Mr. Lee’s position or Soo-ah’s situation → reach the bench → play the route-specific conversation → converge on the audition decision.
+Choose a perspective → collect the mochi from the stool beside the north path → move through the cafe/park space → read Mr. Lee’s position or Soo-ah’s situation → reach the bench and offer the mochi → play the route-specific conversation → converge on the audition decision.
 
 ## Character and system roles
 
@@ -43,12 +43,13 @@ Choose a perspective → move through the cafe/park space → read Mr. Lee’s p
 - **Soo-ah:** playable in the promise route; her choices express loyalty, fear, and growing confidence.
 - **Mr. Lee:** Soo-ah’s father, protective and focused on her studies. His patrol and awareness make Ted’s approach tense but fair.
 - **Bench:** the meeting point and emotional center of the chapter.
+- **Mochi stool:** a small wooden stool beside the north path; F picks up the mochi, and F at the bench hands it to the other friend.
 - **Lee’s Cafe and cherry-tree park:** the route space; use the existing assets and green landscape.
 - **NOVA:** a performing-arts/K-pop agency audition, as confirmed by the user.
 
 ## Branch state to track
 
-`route` (`ted` or `sooAh`), `mrLeeAlert` (clear or spotted), `reachedBench`, `koreanHelpPromise`, `novaInvitation`, and `auditionAccepted`.
+`route` (`ted` or `sooAh`), `mrLeeAlert` (clear or spotted), `reachedBench`, `mochiHolder`, `mochiShared`, `koreanHelpPromise`, `novaInvitation`, and `auditionAccepted`.
 
 The soft spotted/retry state belongs to the approach. Both routes set the shared promise and audition outcome through their own scenes; they should not feel like duplicate dialogue with different camera positions.
 
@@ -62,7 +63,7 @@ The soft spotted/retry state belongs to the approach. Both routes set the shared
 
 ## Current world layout
 
-The park ground now spans 100 m across, with a Seoul gate on the south entrance, five Korean house/apartment buildings around the perimeter, and Sakura trees along the edges. Paths connect the gate, bench, and cafe. Lee’s Cafe is about 18 m from the bench. At Begin, the selected character starts on the far-side approach while their friend waits at the bench. Mr. Lee starts beside the bench, about 9 m from the player, watching the approach, and patrols a loop across the path between the player and the bench, pausing at each corner; he stops and faces the active player when noticed, and resumes after they withdraw. F advances the route-specific bench conversation. Ted’s route covers the NOVA invitation; Soo-ah’s route includes her Korean-help promise and mochi beat. Both end with her agreeing to audition.
+The park ground now spans 100 m across, with a Seoul gate on the south entrance, five Korean house/apartment buildings around the perimeter, and Sakura trees along the edges. Paths connect the gate, bench, and cafe. Lee’s Cafe is about 18 m from the bench. A wooden mochi stool sits beside the north path near Ted’s approach. At Begin, the selected character starts on the far-side approach while their friend waits at the bench. Mr. Lee starts beside the bench, about 9 m from the player, watching the approach, and patrols a loop across the path between the player and the bench, pausing at each corner; he stops and faces the active player when noticed, and resumes after they withdraw. F advances the route-specific bench conversation; F picks up the mochi at the stool and hands it to the friend at the bench. Ted’s route covers the NOVA invitation; Soo-ah’s route includes her Korean-help promise and mochi beat. Both end with her agreeing to audition.
 
 ## Decisions still open
 

@@ -294,7 +294,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   gltfLoader.setMeshoptDecoder(MeshoptDecoder);
   const fbxLoader = new FBXLoader(loaders.manager);
   const textureLoader = new T.TextureLoader(loaders.manager);
-  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
+  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, mochiAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
     gltf(gltfLoader, './assets/park-chair-stage.glb'),
     gltf(gltfLoader, './assets/mr-lee-model.glb').then((asset) => asset.scene),
     gltf(gltfLoader, './assets/ted-stage-lite.glb'),
@@ -308,6 +308,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     gltf(gltfLoader, './assets/props/opt/korean_apartment.glb'),
     gltf(gltfLoader, './assets/props/opt/seoulgate.glb'),
     gltf(gltfLoader, './assets/props/opt/sakura_tree_01_-_low_poly_model.glb'),
+    gltf(gltfLoader, './assets/mochi.glb'),
     loadJsonClip('./assets/clips/MrLeeIdle.json'),
     loadJsonClip('./assets/clips/SooAhSitting.json'),
   ]);
@@ -347,8 +348,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (node.isBone) node.name = T.PropertyBinding.sanitizeNodeName(node.name);
   });
   let tedHips = null;
+  let tedRightHand = null;
   ted.traverse((node) => {
-    if (node.isBone && node.name.toLowerCase().endsWith('mixamorighips')) tedHips = node;
+    if (!node.isBone) return;
+    const boneName = node.name.toLowerCase().replace(/[^a-z]/g, '');
+    if (boneName.endsWith('mixamorigHips'.toLowerCase())) tedHips = node;
+    if (boneName.endsWith('mixamorigrighthand')) tedRightHand = node;
   });
   const mrLee = mrLeeAsset;
   mrLee.traverse((node) => {
@@ -452,9 +457,69 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     [0, 2.3], [6.5, 3.2], [11, 7], [11.5, 12.5], [7, 16.5], [0, 17.5], [-7, 16.5], [-11.5, 12.5], [-11, 7], [-6.5, 3.2],
   ], { closed: true });
   addPath('ParkNorthPath', [[0, 17.5], [0, 20], [0, parkHalf + 0.6]], { lift: 0.018 });
+  addPath('MochiStoolPath', [[0, 20], [2.8, 19.8]], { width: 1.2, lift: 0.018 });
   addPath('ParkGatePath', [[0, -parkHalf - 0.6], [0, -16], [-3, -9], [-7, -3], [-9.4, 4.8]], { lift: 0.018 });
   addPath('ParkEastPath', [[11.5, 12.5], [17, 12.5], [parkHalf + 0.6, 12.5]], { lift: 0.018 });
   addPath('ParkWestPath', [[-11.5, 12.5], [-17, 12.5], [-parkHalf - 0.6, 12.5]], { lift: 0.018 });
+
+  const mochiStoolPosition = { x: 2.8, z: 19.8 };
+  const mochiStool = new T.Group();
+  mochiStool.name = 'MochiStool';
+  const stoolWood = new T.MeshStandardMaterial({ color: '#805033', roughness: 0.82 });
+  const stoolSeat = new T.Mesh(new T.CylinderGeometry(0.21, 0.22, 0.07, 20), stoolWood);
+  stoolSeat.position.y = 0.385;
+  stoolSeat.name = 'MochiStoolSeat';
+  mochiStool.add(stoolSeat);
+  for (const x of [-0.145, 0.145]) for (const z of [-0.135, 0.135]) {
+    const leg = new T.Mesh(new T.BoxGeometry(0.052, 0.38, 0.052), stoolWood);
+    leg.position.set(x, 0.19, z);
+    leg.name = 'MochiStoolLeg';
+    mochiStool.add(leg);
+  }
+  for (const z of [-0.115, 0.115]) {
+    const brace = new T.Mesh(new T.BoxGeometry(0.26, 0.035, 0.035), stoolWood);
+    brace.position.set(0, 0.16, z);
+    brace.name = 'MochiStoolBrace';
+    mochiStool.add(brace);
+  }
+  for (const x of [-0.13, 0.13]) {
+    const brace = new T.Mesh(new T.BoxGeometry(0.035, 0.035, 0.22), stoolWood);
+    brace.position.set(x, 0.16, 0);
+    brace.name = 'MochiStoolBrace';
+    mochiStool.add(brace);
+  }
+  const mochiPlate = new T.Mesh(new T.CylinderGeometry(0.13, 0.14, 0.014, 20), new T.MeshStandardMaterial({ color: '#eadfce', roughness: 0.55 }));
+  mochiPlate.position.y = 0.427;
+  mochiPlate.name = 'MochiPlate';
+  mochiStool.add(mochiPlate);
+  const mochiItem = mochiAsset.scene.clone(true);
+  const rawMochiBounds = new T.Box3().setFromObject(mochiItem);
+  const rawMochiSize = rawMochiBounds.getSize(new T.Vector3());
+  const mochiScale = new T.Vector3(0.12 / rawMochiSize.x, 0.12 / rawMochiSize.y, 0.12 / rawMochiSize.z);
+  mochiItem.scale.copy(mochiScale);
+  const mochiOnStoolPosition = new T.Vector3(
+    -rawMochiBounds.getCenter(new T.Vector3()).x * mochiScale.x,
+    0.435 - rawMochiBounds.min.y * mochiScale.y,
+    -rawMochiBounds.getCenter(new T.Vector3()).z * mochiScale.z,
+  );
+  mochiItem.position.set(
+    mochiOnStoolPosition.x,
+    mochiOnStoolPosition.y,
+    mochiOnStoolPosition.z,
+  );
+  mochiItem.name = 'MochiItem';
+  mochiStool.add(mochiItem);
+  mochiStool.position.set(
+    mochiStoolPosition.x,
+    parkHeightAt(mochiStoolPosition.x, mochiStoolPosition.z),
+    mochiStoolPosition.z,
+  );
+  setShadows(mochiStool);
+  scene.add(mochiStool);
+  obstacles.push({ ...mochiStoolPosition, r: 0.28 });
+  reserved.push({ ...mochiStoolPosition, r: 0.75 });
+  let mochiHolder = null;
+  let mochiShared = false;
 
   // The story bench sits on its own paved patch on the grass, facing the loop.
   const benchPad = new T.Mesh(new T.BoxGeometry(2.4, 0.04, 1.9), new T.MeshStandardMaterial({ color: '#b3aa98', roughness: 0.9 }));
@@ -642,8 +707,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   applyCharacterTexture(sooAh, sooAhTexture, maxAnisotropy, true);
   fitToHeight(sooAh, 1.0);
   let sooAhHips = null;
+  let sooAhLeftHand = null;
   sooAh.traverse((node) => {
-    if (node.isBone && node.name.toLowerCase().endsWith('mixamorighips')) sooAhHips = node;
+    if (!node.isBone) return;
+    const boneName = node.name.toLowerCase().replace(/[^a-z]/g, '');
+    if (boneName.endsWith('mixamorighips')) sooAhHips = node;
+    if (boneName.endsWith('mixamoriglefthand')) sooAhLeftHand = node;
   });
   sooAh.name = 'SooAh';
   sooAh.position.set(0.24, 0.175, 0.15);
@@ -1255,10 +1324,35 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         : { id: 'sooAh', point: characterRoots.SooAh.position, radius: 1.4 },
       { id: 'lee', point: mrLeeRoot.position, radius: 1.8 },
     ];
+    if (routeStarted && !mochiHolder && !mochiShared) targets.push({ id: 'mochi', point: mochiStool.position, radius: 1.35 });
     return targets
       .map((target) => ({ ...target, distance: dist(self.x, self.z, target.point) }))
       .filter((target) => target.distance < target.radius)
       .sort((a, b) => a.distance - b.distance)[0]?.id ?? null;
+  };
+
+  const attachMochiToHand = (name) => {
+    const hand = name === 'Ted' ? tedRightHand : sooAhLeftHand;
+    if (!hand) return false;
+    hand.add(mochiItem);
+    mochiItem.position.set(0.015, 0.025, 0.025);
+    mochiItem.rotation.set(0, 0, 0);
+    return true;
+  };
+  const pickUpMochi = () => {
+    if (!routeStarted || mochiHolder || mochiShared || !attachMochiToHand(selectedCharacter)) return false;
+    mochiHolder = selectedCharacter;
+    message = `${selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah'} picks up the mochi.`;
+    return true;
+  };
+  const shareMochi = () => {
+    if (mochiHolder !== selectedCharacter || mochiShared) return false;
+    const receiver = selectedCharacter === 'Ted' ? 'SooAh' : 'Ted';
+    if (!attachMochiToHand(receiver)) return false;
+    mochiHolder = receiver;
+    mochiShared = true;
+    message = selectedCharacter === 'Ted' ? 'Ted gives Soo-ah the mochi.' : 'Soo-ah shares the mochi with Ted.';
+    return true;
   };
 
   function move({ forward = 0, strafe = 0, dt = 0, fast = false }) {
@@ -1387,8 +1481,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function interact() {
     const target = nearest();
     if (!target) return false;
+    if (target === 'mochi') return pickUpMochi();
     const isBenchFriend = selectedCharacter === 'Ted' ? target === 'sooAh' : target === 'ted';
-    if (routeStarted && isBenchFriend) return talkAtBench();
+    if (routeStarted && isBenchFriend) {
+      if (mrLeeAware) return talkAtBench();
+      if (mochiHolder === selectedCharacter && !mochiShared) return shareMochi();
+      return talkAtBench();
+    }
     if (target === 'lee') {
       message = selectedCharacter === 'SooAh'
         ? 'Mr. Lee: Soo-ah, your exams are close. You should be home studying.'
@@ -1409,19 +1508,20 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     mrLeePatrolling = false;
     setMrLeeMode('idle');
-    const lines = selectedCharacter === 'Ted'
-      ? [
+    const tedLines = [
         'Ted: Nova is holding auditions. You should try with me.',
         'Soo-ah: My dad told me not to see you. He wants me focused on studying.',
         'Ted: You helped me with Korean when school felt lonely. Let me support something you want.',
         'Soo-ah: All right. I will go to the audition.',
-      ]
-      : [
+      ];
+    if (mochiShared && mochiHolder === 'SooAh') tedLines.splice(1, 0, 'Soo-ah: Thank you for bringing the mochi.');
+    const sooAhLines = [
         'Soo-ah: I said I would always help you with Korean.',
-        'They share mochi and renew their promise.',
+        mochiShared ? 'They share mochi and renew their promise.' : 'They renew their promise.',
         'Ted: Nova is holding auditions. You should try for one too.',
         'Soo-ah: I am scared to tell Dad, but I will go.',
       ];
+    const lines = selectedCharacter === 'Ted' ? tedLines : sooAhLines;
     if (routeDialogueIndex < lines.length) {
       message = lines[routeDialogueIndex++];
       if (routeDialogueIndex === lines.length) auditionAccepted = true;
@@ -1696,8 +1796,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       : standingCharacters.has(selectedCharacter)
         ? standingReady.has(selectedCharacter) ? `${label} standing · arrows turn + walk · Q sit at bench` : `${label} is standing up…`
         : `${label} selected · E stand at bench`;
-    const prompt = target === 'sooAh' ? 'F · Talk to Soo-ah'
-      : target === 'ted' ? 'F · Talk to Ted'
+    const prompt = target === 'mochi' ? 'F · Pick up the mochi'
+      : target === 'sooAh' ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi' : 'F · Talk to Soo-ah'
+        : target === 'ted' ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi' : 'F · Talk to Ted'
         : target === 'lee' ? 'F · Talk to Mr. Lee' : '';
     return { task, prompt, message, selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
   }
@@ -2023,6 +2124,43 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       return debugSamples.slice();
     },
     samples: () => debugSamples.slice(),
+    runMochiFlow: async () => {
+      const nextFrame = () => new Promise(requestAnimationFrame);
+      let frames = 0;
+      selectCharacter('Ted');
+      if (!routeStarted && !startRoute()) throw new Error('Ted could not start his route');
+      if (routeStarted && !standingReady.has('Ted') && sittingCharacters.has('Ted') && !standSelected()) {
+        throw new Error('Ted could not stand before the mochi pickup');
+      }
+      while (!standingReady.has('Ted') && frames++ < 900) await nextFrame();
+      if (!standingReady.has('Ted')) throw new Error('Ted did not finish standing');
+
+      mochiHolder = null;
+      mochiShared = false;
+      mochiStool.add(mochiItem);
+      mochiItem.position.copy(mochiOnStoolPosition);
+      mochiItem.rotation.set(0, 0, 0);
+      mrLeeAware = false;
+      placeAtBenchAnchor('Ted', mochiStoolPosition);
+      const pickupTarget = nearest();
+      const pickedUp = interact();
+      const carriedInTedHand = mochiHolder === 'Ted' && mochiItem.parent === tedRightHand;
+      placeAtBenchAnchor('Ted', seatAnchors.Ted);
+      const giveTarget = nearest();
+      const gaveToSooAh = interact();
+      const inSooAhHand = mochiShared && mochiItem.parent === sooAhLeftHand;
+      setCameraView('right');
+      return {
+        pickupTarget,
+        pickedUp,
+        carriedInTedHand,
+        giveTarget,
+        gaveToSooAh,
+        inSooAhHand,
+        mochiShared,
+        stoolPosition: { ...mochiStoolPosition },
+      };
+    },
     runTedSuite: async () => {
       const nextFrame = () => new Promise(requestAnimationFrame);
       const waitFor = async (predicate, limit = 900) => {

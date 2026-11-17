@@ -49,10 +49,10 @@
     <div class="intro">
       <div class="eyebrow">A small story beneath the blossoms</div>
       <h1>A Mochi<br>Promise</h1>
-      <p>After school, Soo-ah and Ted talk on the wooden park chair while Mr. Lee watches nearby. Choose who to play as and try the sit and stand animations.</p>
+      <p>After school, Soo-ah and Ted talk on the wooden park chair while Mr. Lee watches nearby. Ted can collect mochi from the stool by the north path and bring it to Soo-ah.</p>
       <div class="eyebrow">Play as</div>
       <div class="play-as"><button id="playSooAh" aria-pressed="true">Soo-ah</button><button id="playTed" aria-pressed="false">Ted</button></div>
-      <div class="controls"><div><kbd>1–4</kbd> Front · left · right · back view</div><div><kbd>W S</kbd> Zoom in / out</div><div><kbd>A D</kbd> Circle the camera</div><div><kbd>DRAG</kbd> Look around</div><div><kbd>F</kbd> Talk</div><div><kbd>E</kbd> Stand at the bench</div><div><kbd>Q</kbd> Sit at the bench</div><div><kbd>↑ ↓ ← →</kbd> Turn and walk</div><div><kbd>SHIFT + ↑ ↓ ← →</kbd> Run</div></div>
+      <div class="controls"><div><kbd>1–4</kbd> Front · left · right · back view</div><div><kbd>W S</kbd> Zoom in / out</div><div><kbd>A D</kbd> Circle the camera</div><div><kbd>DRAG</kbd> Look around</div><div><kbd>F</kbd> Talk · take · share mochi</div><div><kbd>E</kbd> Stand at the bench</div><div><kbd>Q</kbd> Sit at the bench</div><div><kbd>↑ ↓ ← →</kbd> Turn and walk</div><div><kbd>SHIFT + ↑ ↓ ← →</kbd> Run</div></div>
       <button id="startButton" disabled>Loading characters and movement…</button>
       <div id="loading">Loading characters and movement animations…</div>
       <div id="error"></div>
@@ -63,12 +63,12 @@
       <div class="card"><div class="brand">A Mochi Promise</div><div id="task">E stands and Q sits at the bench.</div></div>
     </div>
     <div id="crosshair"></div>
-    <div class="bottom"><div id="prompt"></div><div id="hint">Arrows move · Shift + arrows run · E stand · Q sit · F talk · 1–4 camera views · W/S zoom · A/D circle</div></div>
+    <div class="bottom"><div id="prompt"></div><div id="hint">Arrows move · Shift + arrows run · E stand · Q sit · F talk / mochi · 1–4 camera views · W/S zoom · A/D circle</div></div>
     <div id="toast"></div>
   </main>
   <script type="module">
     import * as THREE from 'three';
-    import { createScene } from './src/scene.js?v=246';
+    import { createScene } from './src/scene.js?v=253';
 
     const canvas = document.querySelector('#game');
     const startScreen = document.querySelector('#startScreen');
@@ -161,13 +161,16 @@
             saveDebugFile(screenshotName, JSON.stringify({ dataUrl: canvas.toDataURL('image/png') }));
             return;
           }
-          const run = event.key.toLowerCase() === 'z' ? game.debug.runTedSuite
-            : event.key.toLowerCase() === 'x' ? game.debug.runSooAhCycle : null;
+          const debugKey = event.key.toLowerCase();
+          const run = debugKey === 'z' ? game.debug.runTedSuite
+            : debugKey === 'x' ? game.debug.runSooAhCycle
+              : debugKey === 'm' ? game.debug.runMochiFlow : null;
           if (!run) return;
           debugResults.value = 'RUNNING';
           run().then((result) => {
             debugResults.value = JSON.stringify(result);
-            return saveDebugFile(event.key.toLowerCase() === 'z' ? 'ted-sit-tests.json' : 'sooah-sit-tests.json', debugResults.value);
+            if (debugKey === 'z') return saveDebugFile('ted-sit-tests.json', debugResults.value);
+            if (debugKey === 'x') return saveDebugFile('sooah-sit-tests.json', debugResults.value);
           })
             .catch((error) => { debugResults.value = JSON.stringify({ error: error?.message || String(error) }); });
         });
