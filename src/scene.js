@@ -294,7 +294,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   gltfLoader.setMeshoptDecoder(MeshoptDecoder);
   const fbxLoader = new FBXLoader(loaders.manager);
   const textureLoader = new T.TextureLoader(loaders.manager);
-  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, mochiAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
+  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, mochiAsset, mochiHeldAsset, mochiSkewerAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
     gltf(gltfLoader, './assets/park-chair-stage.glb'),
     gltf(gltfLoader, './assets/mr-lee-model.glb').then((asset) => asset.scene),
     gltf(gltfLoader, './assets/ted-stage-lite.glb'),
@@ -309,6 +309,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     gltf(gltfLoader, './assets/props/opt/seoulgate.glb'),
     gltf(gltfLoader, './assets/props/opt/sakura_tree_01_-_low_poly_model.glb'),
     gltf(gltfLoader, './assets/mochi.glb'),
+    gltf(gltfLoader, './assets/mochi-held.glb'),
+    gltf(gltfLoader, './assets/mochi-skewer-held.glb'),
     loadJsonClip('./assets/clips/MrLeeIdle.json'),
     loadJsonClip('./assets/clips/SooAhSitting.json'),
   ]);
@@ -511,14 +513,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   );
   mochiItem.name = 'MochiItem';
   mochiStool.add(mochiItem);
-  const heldMochi = new T.Mesh(
-    new T.SphereGeometry(0.065, 24, 18),
-    new T.MeshStandardMaterial({ color: '#f477a2', roughness: 0.78 }),
-  );
-  heldMochi.name = 'HeldMochi';
+  const heldMochi = mochiHeldAsset.scene.clone(true);
+  heldMochi.name = 'HeldMochiBite';
   heldMochi.visible = false;
-  heldMochi.castShadow = true;
-  heldMochi.receiveShadow = true;
+  const heldMochiSkewer = mochiSkewerAsset.scene.clone(true);
+  heldMochiSkewer.name = 'HeldMochiSkewer';
+  heldMochiSkewer.visible = false;
+  setShadows(heldMochi);
+  setShadows(heldMochiSkewer);
   mochiStool.position.set(
     mochiStoolPosition.x,
     parkHeightAt(mochiStoolPosition.x, mochiStoolPosition.z),
@@ -1040,6 +1042,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const heldMochiWorld = new T.Vector3();
   const heldMochiParentScale = new T.Vector3();
   const heldMochiForward = new T.Vector3(0, 0, 1);
+  const heldMochiHandQuaternion = new T.Quaternion();
+  const heldMochiRootQuaternion = new T.Quaternion();
   const mochiMouthOffset = new T.Vector3(0, -0.045, 0.085);
   const mochiNodAxis = new T.Vector3(1, 0, 0);
   const mochiNodRotation = new T.Quaternion();
@@ -1056,6 +1060,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       head.updateMatrixWorld(true);
       hand.updateMatrixWorld(true);
       mochiMouthWorld.copy(mochiMouthOffset).applyMatrix4(head.matrixWorld);
+      mochiMouthWorld.y -= 0.022;
       mochiMouthLocal.copy(hand.worldToLocal(mochiMouthWorld));
       const eased = progress * progress * (3 - 2 * progress);
       heldMochi.position.lerpVectors(state.startPosition, mochiMouthLocal, eased);
@@ -1402,18 +1407,24 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     hand.updateWorldMatrix(true, false);
     characterRoots[name].updateMatrixWorld(true);
     hand.getWorldPosition(heldMochiWorld);
-    heldMochiWorld.y += 0.13;
+    heldMochiWorld.y += 0.008;
     heldMochiForward.set(0, 0, 1).applyQuaternion(characterRoots[name].quaternion);
-    heldMochiWorld.addScaledVector(heldMochiForward, 0.16);
-    hand.add(heldMochi);
-    heldMochi.position.copy(hand.worldToLocal(heldMochiWorld));
+    heldMochiWorld.addScaledVector(heldMochiForward, 0.032);
+    hand.add(heldMochiSkewer);
+    heldMochiSkewer.position.copy(hand.worldToLocal(heldMochiWorld));
+    const topBall = heldMochiSkewer.getObjectByName('MochiBall_2');
+    if (topBall) topBall.visible = true;
     hand.getWorldScale(heldMochiParentScale);
-    heldMochi.scale.set(
+    heldMochiSkewer.scale.set(
       1 / heldMochiParentScale.x,
       1 / heldMochiParentScale.y,
       1 / heldMochiParentScale.z,
     );
-    heldMochi.visible = true;
+    hand.getWorldQuaternion(heldMochiHandQuaternion);
+    characterRoots[name].getWorldQuaternion(heldMochiRootQuaternion);
+    heldMochiSkewer.quaternion.copy(heldMochiHandQuaternion.invert().multiply(heldMochiRootQuaternion));
+    heldMochiSkewer.visible = true;
+    heldMochi.visible = false;
     mochiItem.rotation.set(0, 0, 0);
     return true;
   };
@@ -1428,7 +1439,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const shareMochi = () => {
     if (mochiHolder !== selectedCharacter || mochiShared) return false;
     const receiver = selectedCharacter === 'Ted' ? 'SooAh' : 'Ted';
+    const topBall = heldMochiSkewer.getObjectByName('MochiBall_2');
+    if (!topBall) return false;
     if (!attachMochiToHand(receiver)) return false;
+    heldMochiSkewer.updateMatrixWorld(true);
+    topBall.updateWorldMatrix(true, false);
+    topBall.getWorldPosition(heldMochiWorld);
+    topBall.visible = false;
+    const hand = receiver === 'Ted' ? tedRightHand : sooAhLeftHand;
+    hand.add(heldMochi);
+    heldMochi.position.copy(hand.worldToLocal(heldMochiWorld));
+    hand.getWorldScale(heldMochiParentScale);
+    heldMochi.scale.set(
+      0.72 / heldMochiParentScale.x,
+      0.72 / heldMochiParentScale.y,
+      0.72 / heldMochiParentScale.z,
+    );
+    heldMochi.visible = true;
     mochiHolder = receiver;
     mochiShared = true;
     mochiConsumed = false;
@@ -2235,6 +2262,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mochiStool.add(mochiItem);
       mochiItem.visible = true;
       mochiItem.scale.copy(mochiScale);
+      heldMochiSkewer.visible = false;
+      const topBall = heldMochiSkewer.getObjectByName('MochiBall_2');
+      if (topBall) topBall.visible = true;
       heldMochi.visible = false;
       heldMochi.scale.setScalar(1);
       mochiItem.position.copy(mochiOnStoolPosition);
@@ -2243,14 +2273,19 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       placeAtBenchAnchor('Ted', mochiStoolPosition);
       const pickupTarget = nearest();
       const pickedUp = interact();
-      const carriedInTedHand = mochiHolder === 'Ted' && mochiItem.parent === tedRightHand;
-      const visibleInTedHand = heldMochi.visible && heldMochi.parent === tedRightHand;
+      const carriedInTedHand = mochiHolder === 'Ted' && heldMochiSkewer.parent === tedRightHand;
+      const visibleInTedHand = heldMochiSkewer.visible && heldMochiSkewer.parent === tedRightHand;
+      if (pickedUp) {
+        await nextFrame();
+        await debug.captureScreenshot?.('mochi-ted-hand.png');
+      }
       placeAtBenchAnchor('Ted', seatAnchors.Ted);
       mrLeeAware = true;
       const mrLeeWasAwareAtGive = mrLeeAware;
       const giveTarget = nearest();
       const gaveToSooAh = interact();
-      const visibleInSooAhHand = heldMochi.visible && heldMochi.parent === sooAhLeftHand;
+      const visibleInSooAhHand = heldMochiSkewer.visible && heldMochiSkewer.parent === sooAhLeftHand
+        && heldMochi.visible && heldMochi.parent === sooAhLeftHand;
       heldMochi.getWorldScale(heldMochiParentScale);
       if (gaveToSooAh) {
         await nextFrame();
@@ -2260,7 +2295,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       frames = 0;
       while (gaveToSooAh && !mochiConsumed && frames++ < 180) await nextFrame();
-      const inSooAhHand = mochiShared && mochiItem.parent === sooAhLeftHand;
+      const inSooAhHand = mochiShared && heldMochiSkewer.parent === sooAhLeftHand;
       return {
         pickupTarget,
         pickedUp,
