@@ -1369,6 +1369,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         : { id: 'sooAh', point: characterRoots.SooAh.position, radius: 1.4 },
       { id: 'lee', point: mrLeeRoot.position, radius: 1.8 },
     ];
+    if (mochiHolder === selectedCharacter && !mochiShared) {
+      const friend = targets[0];
+      if (dist(self.x, self.z, friend.point) < friend.radius) return friend.id;
+    }
     if (routeStarted && !mochiHolder && !mochiShared) targets.push({ id: 'mochi', point: mochiStool.position, radius: 1.35 });
     return targets
       .map((target) => ({ ...target, distance: dist(self.x, self.z, target.point) }))
@@ -1542,7 +1546,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (target === 'mochi') return pickUpMochi();
     const isBenchFriend = selectedCharacter === 'Ted' ? target === 'sooAh' : target === 'ted';
     if (routeStarted && isBenchFriend) {
-      if (mrLeeAware) return talkAtBench();
       if (mochiHolder === selectedCharacter && !mochiShared) return shareMochi();
       return talkAtBench();
     }
@@ -2209,6 +2212,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       const pickedUp = interact();
       const carriedInTedHand = mochiHolder === 'Ted' && mochiItem.parent === tedRightHand;
       placeAtBenchAnchor('Ted', seatAnchors.Ted);
+      mrLeeAware = true;
       const giveTarget = nearest();
       const gaveToSooAh = interact();
       setCameraView('right');
@@ -2221,6 +2225,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         carriedInTedHand,
         giveTarget,
         gaveToSooAh,
+        mrLeeWasAwareAtGive: mrLeeAware,
         inSooAhHand,
         mochiShared,
         mochiConsumed,
