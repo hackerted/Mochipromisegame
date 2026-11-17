@@ -878,6 +878,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     Ted: { left: Math.PI / 2, right: Math.PI / 2 },
   };
   const sittingTalkClips = { SooAh: null, Ted: null };
+  const eatingClips = { SooAh: null };
   const nervousClips = { SooAh: null, Ted: null };
   const terrifiedClips = { SooAh: null, Ted: null };
   const sitToStandClips = { SooAh: null, Ted: null };
@@ -900,7 +901,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     // height). Processed once here so repeated F presses reuse the same clip.
     // Both talking clips turn toward the character's left (+X); Soo-ah sits on the +X side, so she
     // is mirrored to turn toward Ted instead of away from him.
-    if (name === 'SooAhSittingTalk') sittingTalkClips.SooAh = mirrorClip(inPlaceStandTransition(clip));
+    if (name === 'SooAhSittingTalk') {
+      sittingTalkClips.SooAh = mirrorClip(inPlaceStandTransition(clip));
+      eatingClips.SooAh = T.AnimationUtils.subclip(sittingTalkClips.SooAh, 'SooAhEating', 990, 1050, 30);
+    }
     if (name === 'TedSittingTalk') sittingTalkClips.Ted = inPlaceSit(clip);
     if (name === 'SooAhNervous') nervousClips.SooAh = clip;
     if (name === 'TedNervous') nervousClips.Ted = clip;
@@ -1054,6 +1058,19 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const hand = state.recipient === 'SooAh' ? sooAhLeftHand : tedRightHand;
     const head = state.recipient === 'SooAh' ? sooAhHead : tedHead;
     if (!hand || !head) return;
+    if (state.handAnimation) {
+      if (state.elapsed >= state.biteAt) heldMochi.visible = false;
+      if (state.elapsed >= state.duration) {
+        heldMochi.visible = false;
+        mochiItem.visible = false;
+        mochiItem.scale.copy(mochiScale);
+        mochiConsumed = true;
+        mochiEating = null;
+        restoreIdle(state.recipient);
+        message = 'Soo-ah eats the mochi.';
+      }
+      return;
+    }
     const progress = clamp((state.elapsed - 1.85) / 0.95, 0, 1);
     if (progress > 0) {
       characterRoots[state.recipient].updateMatrixWorld(true);
@@ -1462,11 +1479,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mochiEating = {
       recipient: receiver,
       elapsed: 0,
-      duration: 3.1,
+      duration: receiver === 'SooAh' && eatingClips.SooAh ? eatingClips.SooAh.duration : 3.1,
+      biteAt: 0.9,
+      handAnimation: receiver === 'SooAh' && Boolean(eatingClips.SooAh),
       startPosition: heldMochi.position.clone(),
       startScale: heldMochi.scale.clone(),
       startHeadQuaternion: (receiver === 'SooAh' ? sooAhHead : tedHead)?.quaternion.clone() ?? null,
     };
+    if (mochiEating.handAnimation) {
+      sittingTalkTimers.SooAh = 0;
+      characterMode.SooAh = 'eating';
+      playClip('SooAh', eatingClips.SooAh, { loop: false, fade: 0.12 });
+    }
     if (followCamera.mode !== 'free') {
       followCamera.mode = 'front';
       followCamera.targetAngle = characterRoots[receiver].rotation.y;
@@ -2290,7 +2314,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (gaveToSooAh) {
         await nextFrame();
         await debug.captureScreenshot?.('mochi-in-hand.png');
-        while (mochiEating && mochiEating.elapsed < 2.3) await nextFrame();
+        while (mochiEating && mochiEating.elapsed < 0.7) await nextFrame();
         await debug.captureScreenshot?.('mochi-at-mouth.png');
       }
       frames = 0;
