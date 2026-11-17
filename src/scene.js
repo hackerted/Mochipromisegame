@@ -1412,7 +1412,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         : { id: 'sooAh', point: characterRoots.SooAh.position, radius: 1.4 },
       { id: 'lee', point: mrLeeRoot.position, radius: 1.8 },
     ];
-    if (mochiHolder === selectedCharacter && !mochiShared) {
+    if ((mochiHolder === selectedCharacter && !mochiShared) || (mochiShared && mochiConsumed)) {
       const friend = targets[0];
       if (dist(self.x, self.z, friend.point) < friend.radius) return friend.id;
     }
@@ -1632,7 +1632,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function interact() {
-    if (mochiEating) return true;
+    if (mochiEating) {
+      message = 'Soo-ah is taking a bite…';
+      return true;
+    }
     const target = nearest();
     if (!target) return false;
     if (target === 'mochi') return pickUpMochi();
@@ -1655,7 +1658,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function talkAtBench() {
-    if (mrLeeAware) {
+    if (mrLeeAware && !mochiConsumed) {
       message = 'Mr. Lee is watching. Move out of sight and wait before you talk.';
       return true;
     }
@@ -2333,6 +2336,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       frames = 0;
       while (gaveToSooAh && mochiEating && frames++ < 180) await nextFrame();
+      mrLeeAware = true;
+      const talkTargetAfterEat = nearest();
       const inSooAhHand = mochiShared && heldMochiSkewer.parent === sooAhLeftHand;
       return {
         pickupTarget,
@@ -2348,6 +2353,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mochiShared,
         mochiConsumed,
         mochiHiddenAfterBite: !heldMochi.visible && !heldMochiSkewer.visible,
+        talkTargetAfterEat,
         stoolPosition: { ...mochiStoolPosition },
       };
     },
