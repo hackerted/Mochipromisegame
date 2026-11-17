@@ -1039,6 +1039,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   let mrLeePatrolIndex = 1;
   let mrLeePatrolWait = 0;
   let selectedCharacter = 'SooAh';
+  let mochiCameraTarget = null;
   const standingCharacters = new Set();
   const characterRoots = { SooAh: sooAh, Ted: tedRoot };
   const mochiMouthWorld = new T.Vector3();
@@ -1059,15 +1060,22 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const head = state.recipient === 'SooAh' ? sooAhHead : tedHead;
     if (!hand || !head) return;
     if (state.handAnimation) {
-      if (state.elapsed >= state.biteAt) heldMochi.visible = false;
+      if (state.elapsed >= state.biteAt && !state.biteTaken) {
+        state.biteTaken = true;
+        heldMochi.visible = false;
+        heldMochiSkewer.visible = false;
+        mochiItem.visible = false;
+        mochiConsumed = true;
+        message = 'Soo-ah takes a bite.';
+      }
       if (state.elapsed >= state.duration) {
         heldMochi.visible = false;
+        heldMochiSkewer.visible = false;
         mochiItem.visible = false;
         mochiItem.scale.copy(mochiScale);
-        mochiConsumed = true;
         mochiEating = null;
-        restoreIdle(state.recipient);
-        message = 'Soo-ah eats the mochi.';
+        message = 'Soo-ah: "That was yummy! Thank you, Ted!"';
+        if (!startSittingTalk('SooAh')) restoreIdle('SooAh');
       }
       return;
     }
@@ -1378,7 +1386,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function updateFollowCamera(dt) {
-    const root = characterRoots[mochiEating?.recipient ?? selectedCharacter];
+    const root = characterRoots[mochiEating?.recipient ?? mochiCameraTarget ?? selectedCharacter];
     followCamera.angle += wrapAngle(followCamera.targetAngle - followCamera.angle) * (1 - Math.exp(-dt * 6));
     followTarget.set(root.position.x, root.position.y + 0.7, root.position.z);
     const horizontal = Math.cos(followCamera.pitch) * followCamera.distance;
@@ -1495,6 +1503,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       followCamera.mode = 'front';
       followCamera.targetAngle = characterRoots[receiver].rotation.y;
     }
+    mochiCameraTarget = receiver;
     message = selectedCharacter === 'Ted' ? 'Ted gives Soo-ah the mochi.' : 'Soo-ah shares the mochi with Ted.';
     return true;
   };
@@ -1623,6 +1632,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function interact() {
+    if (mochiEating) return true;
     const target = nearest();
     if (!target) return false;
     if (target === 'mochi') return pickUpMochi();
@@ -1657,7 +1667,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         'Ted: You helped me with Korean when school felt lonely. Let me support something you want.',
         'Soo-ah: All right. I will go to the audition.',
       ];
-    if (mochiShared && mochiHolder === 'SooAh') tedLines.splice(1, 0, 'Soo-ah: Thank you for bringing the mochi.');
+    if (mochiShared && mochiHolder === 'SooAh' && !mochiConsumed) tedLines.splice(1, 0, 'Soo-ah: Thank you for bringing the mochi.');
     const sooAhLines = [
         'Soo-ah: I said I would always help you with Korean.',
         mochiShared ? 'They share mochi and renew their promise.' : 'They renew their promise.',
@@ -1998,7 +2008,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     for (const name of Object.keys(sittingTalkTimers)) {
       if (sittingTalkTimers[name] <= 0) continue;
       sittingTalkTimers[name] = Math.max(0, sittingTalkTimers[name] - dt);
-      if (sittingTalkTimers[name] === 0 && characterMode[name] === 'sittingTalking') restoreIdle(name);
+      if (sittingTalkTimers[name] === 0 && characterMode[name] === 'sittingTalking') {
+        restoreIdle(name);
+        if (mochiCameraTarget === name) mochiCameraTarget = null;
+      }
     }
     for (const [name, state] of Object.entries(emotionalStates)) {
       state.remaining = Math.max(0, state.remaining - dt);
@@ -2283,6 +2296,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mochiShared = false;
       mochiConsumed = false;
       mochiEating = null;
+      mochiCameraTarget = null;
       mochiStool.add(mochiItem);
       mochiItem.visible = true;
       mochiItem.scale.copy(mochiScale);
@@ -2318,7 +2332,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         await debug.captureScreenshot?.('mochi-at-mouth.png');
       }
       frames = 0;
-      while (gaveToSooAh && !mochiConsumed && frames++ < 180) await nextFrame();
+      while (gaveToSooAh && mochiEating && frames++ < 180) await nextFrame();
       const inSooAhHand = mochiShared && heldMochiSkewer.parent === sooAhLeftHand;
       return {
         pickupTarget,
@@ -2333,7 +2347,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         heldMochiWorldScale: heldMochiParentScale.toArray(),
         mochiShared,
         mochiConsumed,
-        mochiHiddenAfterBite: !heldMochi.visible,
+        mochiHiddenAfterBite: !heldMochi.visible && !heldMochiSkewer.visible,
         stoolPosition: { ...mochiStoolPosition },
       };
     },
