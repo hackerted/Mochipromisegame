@@ -95,15 +95,16 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 ### Dance and singing controls
 
 - Lock Soo-ah’s walking and camera controls during the performance. Temporarily use the four arrow keys for the audition prompts, then restore the normal controls when the scene ends.
-- Show a small sequence of randomized arrow prompts with a beat indicator. Reveal each prompt before its beat; time the acceptance window from the chosen song’s tempo rather than guessing it before the music is selected.
-- Divide the song into a short dance phrase, a singing phrase, and a final pose. Dance prompts trigger compatible dance moves; singing prompts let the player hold a prompted direction through a sustained note and release on its cue. Play the singing animation and music throughout that phrase.
+- First preview the actual animations available after Soo-ah is auto-rigged. Choose the routine from those clips; do not assume Mixamo has a separate clip for every step or gesture. Adjust the selected clip’s speed and arm spacing in Mixamo where useful.
+- Show a small sequence of randomized arrow prompts with a beat indicator. Tie cues to beats in the selected clip and song. Prompts can affect timing, confidence, and which part of an available clip plays; they must not request a move with no matching animation.
+- Use one suitable dance clip for the main routine. For singing, use a singing/performance clip only if one is available and fits. Otherwise, keep a simple dance/standing clip running and add the mic, head, and free-hand gestures as a small custom Blender animation on the rig.
 - Keep it forgiving: a missed or wrong key causes a small stumble or lower flourish, then Soo-ah recovers and continues. Never reset the audition or block the story ending. Use the final result for a subtle animation and audience-reaction variation, not for whether she succeeds.
 - Add a brief practice cue before the scored performance. Make the prompts visible and repeat the cue if the player misses several inputs, so the sequence is understandable without musical timing experience.
 
 ### Assets and audio to review
 
 - **NOVA venue:** exterior entrance/sign, audition room, stage, curtains/backdrop, judges’ table and chairs, a modest audience, stage lights, speakers, and a microphone or stand.
-- **Characters:** Ted’s robot-dance clip; Soo-ah’s dance, singing, freeze/startle, and recovery clips; any facial or mouth movement already available. Retarget clips onto the existing character rigs and verify their forward axes before use.
+- **Characters:** After Soo-ah is auto-rigged, review the real Mixamo library and record the exact clip names that work on her. Prefer one suitable dance clip over a list of assumed moves. Singing, freeze/startle, recovery, Ted’s robot dance, and figure-placement gestures may need short custom Blender keys if no matching library clip is available. Check facial or mouth movement separately; a full-body clip does not guarantee singing or lip sync. Verify retargeting and forward axes before use.
 - **Story prop:** Ted’s Gundam figure, sized to read clearly in his hand and when placed on the stage edge. Keep it as a separate prop so the handoff/placement can be animated.
 - **Music:** user-selected, usable audio file plus its tempo or beat times. Check whether it includes vocals/backing vocals and whether Soo-ah’s animation should match the full track or a short audition excerpt. Keep the music choice open until the assets are reviewed.
 - **Home scenes:** small, reusable bedroom or home-corner assets for the evening beats; detailed home exploration is out of this level’s scope.
@@ -113,7 +114,7 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 1. Define a single chapter transition using the existing `auditionAccepted` outcome so both Ted and Soo-ah routes enter the same next level.
 2. Block out the evening/morning transitions, meetup, NOVA entrance, backstage, stage, audience, and judges with temporary geometry. Confirm character scale, stage access, camera framing, and a clear path for Ted to enter and leave.
 3. Add the story beats and figure placement, with movement locked during each cutscene and every animation transition returning to a stable idle pose.
-4. After the user selects music and supplies/reviews assets, add the dance and singing prompts using measured beat times. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
+4. After the user selects music and reviews the actual Mixamo clips, map prompts only to those clips and measured beat times. Add small Blender keys for missing story gestures. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
 5. Verify both prior routes reach this level once; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed and remains on stage; the correct line plays once; all prompt outcomes reach the same completed-audition ending; normal controls return afterward.
 
 **Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. The animation and music assets are not chosen until the user has reviewed the available files.
