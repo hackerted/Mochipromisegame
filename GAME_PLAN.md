@@ -79,9 +79,48 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 **Built in this pass:** A rounded two-way road loop, sidewalks, lane dashes, four zebra crossings with paths connected to the outer sidewalk, two marked parking bays with parked Kia Forte cars, one slow Kia Forte on the loop, two hydrants, a cafe bus-stop sign and a street bin. The city bus and raised curb ramps remain future dressing.
 
+## Next level: Home to the NOVA audition
+
+**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game.
+
+### Story sequence
+
+1. **Leave the park:** Finish the current route after Soo-ah agrees to audition. Keep the chosen route and the shared promise in chapter state, then transition out of the park without replaying the conversation.
+2. **Go home that evening:** Show a short homecoming beat for both friends. Ted sets his Gundam figure aside and packs it; Soo-ah keeps the audition details and quietly rehearses. Use brief playable interactions or a compact montage rather than building two large explorable homes.
+3. **Meet the next morning:** Show a clear day-to-morning change. Ted and Soo-ah meet at a familiar street or transit landmark, then travel together to the NOVA building. The existing park roads can serve as the transition route; NOVA and its audition interior are new locations.
+4. **Soo-ah freezes:** At the audition, Soo-ah steps onto the stage, sees the judges and audience, and freezes. Give the player a brief moment to notice her fear before Ted helps.
+5. **Ted encourages her:** Ted hops onto the stage, performs a short original Gundam-inspired robot dance, places his figure upright at the stage edge as a good-luck charm, and says, “Good luck, chipmunk.” He exits the performance space so Soo-ah can take her turn. The interruption is affectionate and supportive, not a joke at her expense.
+6. **Soo-ah performs:** Soo-ah starts with a short dance and singing performance. Her confidence and animation build as the player follows the music cues. End with a warm audience/judge reaction and a clear sense that she completed the audition.
+
+### Dance and singing controls
+
+- Lock Soo-ah’s walking and camera controls during the performance. Temporarily use the four arrow keys for the audition prompts, then restore the normal controls when the scene ends.
+- Show a small sequence of randomized arrow prompts with a beat indicator. Reveal each prompt before its beat; time the acceptance window from the chosen song’s tempo rather than guessing it before the music is selected.
+- Divide the song into a short dance phrase, a singing phrase, and a final pose. Dance prompts trigger compatible dance moves; singing prompts let the player hold a prompted direction through a sustained note and release on its cue. Play the singing animation and music throughout that phrase.
+- Keep it forgiving: a missed or wrong key causes a small stumble or lower flourish, then Soo-ah recovers and continues. Never reset the audition or block the story ending. Use the final result for a subtle animation and audience-reaction variation, not for whether she succeeds.
+- Add a brief practice cue before the scored performance. Make the prompts visible and repeat the cue if the player misses several inputs, so the sequence is understandable without musical timing experience.
+
+### Assets and audio to review
+
+- **NOVA venue:** exterior entrance/sign, audition room, stage, curtains/backdrop, judges’ table and chairs, a modest audience, stage lights, speakers, and a microphone or stand.
+- **Characters:** Ted’s robot-dance clip; Soo-ah’s dance, singing, freeze/startle, and recovery clips; any facial or mouth movement already available. Retarget clips onto the existing character rigs and verify their forward axes before use.
+- **Story prop:** Ted’s Gundam figure, sized to read clearly in his hand and when placed on the stage edge. Keep it as a separate prop so the handoff/placement can be animated.
+- **Music:** user-selected, usable audio file plus its tempo or beat times. Check whether it includes vocals/backing vocals and whether Soo-ah’s animation should match the full track or a short audition excerpt. Keep the music choice open until the assets are reviewed.
+- **Home scenes:** small, reusable bedroom or home-corner assets for the evening beats; detailed home exploration is out of this level’s scope.
+
+### Build order and completion checks
+
+1. Define a single chapter transition using the existing `auditionAccepted` outcome so both Ted and Soo-ah routes enter the same next level.
+2. Block out the evening/morning transitions, meetup, NOVA entrance, backstage, stage, audience, and judges with temporary geometry. Confirm character scale, stage access, camera framing, and a clear path for Ted to enter and leave.
+3. Add the story beats and figure placement, with movement locked during each cutscene and every animation transition returning to a stable idle pose.
+4. After the user selects music and supplies/reviews assets, add the dance and singing prompts using measured beat times. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
+5. Verify both prior routes reach this level once; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed and remains on stage; the correct line plays once; all prompt outcomes reach the same completed-audition ending; normal controls return afterward.
+
+**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. The animation and music assets are not chosen until the user has reviewed the available files.
+
 ## Decisions still open
 
 - Confirm the exact spoken wording and meaning of the reciprocal mochi promise.
 - Decide whether the first playable chapter shows the bullying directly or introduces it through a short recap and dialogue.
-- Decide whether accepting NOVA is fixed in this chapter or expressed through a final player choice. Current plan assumes she agrees to attend; the conversation with Mr. Lee happens later.
+- The first chapter currently assumes Soo-ah agrees to attend. The next-level plan uses that shared outcome; only add a yes/no invitation choice if the story direction changes.
 - Add physical occlusion/hiding checks if distance-and-facing awareness feels too easy to evade or unfair in play.
