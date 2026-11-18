@@ -294,7 +294,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   gltfLoader.setMeshoptDecoder(MeshoptDecoder);
   const fbxLoader = new FBXLoader(loaders.manager);
   const textureLoader = new T.TextureLoader(loaders.manager);
-  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, mochiAsset, mochiHeldAsset, mochiSkewerAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
+  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, hydrantAsset, mochiAsset, mochiHeldAsset, mochiSkewerAsset, kiaCarAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
     gltf(gltfLoader, './assets/park-chair-stage.glb'),
     gltf(gltfLoader, './assets/mr-lee-model.glb').then((asset) => asset.scene),
     gltf(gltfLoader, './assets/ted-stage-lite.glb'),
@@ -308,9 +308,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     gltf(gltfLoader, './assets/props/opt/korean_apartment.glb'),
     gltf(gltfLoader, './assets/props/opt/seoulgate.glb'),
     gltf(gltfLoader, './assets/props/opt/sakura_tree_01_-_low_poly_model.glb'),
+    gltf(gltfLoader, './assets/props/korean_hydrant.glb'),
     gltf(gltfLoader, './assets/mochi.glb'),
     gltf(gltfLoader, './assets/mochi-held.glb'),
     gltf(gltfLoader, './assets/mochi-skewer-held.glb'),
+    gltf(gltfLoader, './assets/cars/kia_forte_hatchback_2022.glb'),
     loadJsonClip('./assets/clips/MrLeeIdle.json'),
     loadJsonClip('./assets/clips/SooAhSitting.json'),
   ]);
@@ -411,6 +413,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     return root;
   }
 
+  function addRoadVehicle(asset, name, targetLength = 4.4) {
+    const root = new T.Group();
+    const model = asset.scene.clone(true);
+    const bounds = new T.Box3().setFromObject(model);
+    const size = bounds.getSize(new T.Vector3());
+    const center = bounds.getCenter(new T.Vector3());
+    const scale = targetLength / Math.max(size.x, size.z);
+    model.scale.setScalar(scale);
+    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+    model.name = `${name}Model`;
+    root.name = name;
+    root.add(model);
+    setShadows(root);
+    scene.add(root);
+    return root;
+  }
+
   // ---- Park ---------------------------------------------------------------------------------------
   // Sized for the 1 m tall characters. The story bench stays at the origin facing +Z (north); the park
   // is a 45 m square around it inside a hedge, with the city to go outside the hedge.
@@ -421,7 +440,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const pathLines = []; // { points, halfWidth }
   const pathMaterial = new T.MeshStandardMaterial({ color: '#c8b892', roughness: 0.95, side: T.DoubleSide });
 
-  function addPath(name, points, { closed = false, width = 1.8, lift = 0.012 } = {}) {
+  function addPath(name, points, { closed = false, width = 1.8, lift = 0.012, material = pathMaterial, trackClearance = true } = {}) {
     const curve = new T.CatmullRomCurve3(points.map(([x, z]) => new T.Vector3(x, 0, z)), closed, 'centripetal');
     const segments = Math.max(2, Math.ceil(curve.getLength() * 2));
     const positions = [];
@@ -443,11 +462,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    const mesh = new T.Mesh(geometry, pathMaterial);
+    const mesh = new T.Mesh(geometry, material);
     mesh.name = name;
     mesh.receiveShadow = true;
     scene.add(mesh);
-    pathLines.push({ points: samples, halfWidth: width / 2 });
+    if (trackClearance) pathLines.push({ points: samples, halfWidth: width / 2 });
     return curve;
   }
   // Distance from a point to the nearest path edge (negative = on the path).
@@ -457,14 +476,149 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   // A loop passes just in front of the bench; spokes lead to the four entrances.
   const loopCenter = { x: 0, z: 10 };
+  const roadHalf = 28.6;
   const loopPath = addPath('ParkLoopPath', [
     [0, 2.3], [6.5, 3.2], [11, 7], [11.5, 12.5], [7, 16.5], [0, 17.5], [-7, 16.5], [-11.5, 12.5], [-11, 7], [-6.5, 3.2],
   ], { closed: true });
-  addPath('ParkNorthPath', [[0, 17.5], [0, 20], [0, parkHalf + 0.6]], { lift: 0.018 });
+  addPath('ParkNorthPath', [[0, 17.5], [0, 20], [0, parkHalf + 2.1], [0, roadHalf - 2.6], [0, roadHalf + 2.6], [0, roadHalf + 4.5]], { lift: 0.018 });
   addPath('MochiStoolPath', [[0, 20], [2.8, 19.8]], { width: 1.2, lift: 0.018 });
-  addPath('ParkGatePath', [[0, -parkHalf - 0.6], [0, -16], [-3, -9], [-7, -3], [-9.4, 4.8]], { lift: 0.018 });
-  addPath('ParkEastPath', [[11.5, 12.5], [17, 12.5], [parkHalf + 0.6, 12.5]], { lift: 0.018 });
-  addPath('ParkWestPath', [[-11.5, 12.5], [-17, 12.5], [-parkHalf - 0.6, 12.5]], { lift: 0.018 });
+  addPath('ParkGatePath', [[0, -roadHalf - 4.5], [0, -roadHalf - 2.6], [0, -roadHalf + 2.6], [0, -parkHalf - 2.1], [0, -16], [-3, -9], [-7, -3], [-9.4, 4.8]], { lift: 0.018 });
+  addPath('ParkEastPath', [[11.5, 12.5], [17, 12.5], [parkHalf + 2.1, 12.5], [roadHalf - 2.6, 12.5], [roadHalf + 2.6, 12.5], [roadHalf + 4.5, 12.5]], { lift: 0.018 });
+  addPath('ParkWestPath', [[-11.5, 12.5], [-17, 12.5], [-parkHalf - 2.1, 12.5], [-roadHalf + 2.6, 12.5], [-roadHalf - 2.6, 12.5], [-roadHalf - 4.5, 12.5]], { lift: 0.018 });
+
+  const ringPoints = (half, corner) => [
+    [-half + corner, -half], [half - corner, -half], [half, -half + corner], [half, half - corner],
+    [half - corner, half], [-half + corner, half], [-half, half - corner], [-half, -half + corner],
+  ];
+  const asphaltMaterial = new T.MeshStandardMaterial({ color: '#45494b', roughness: 0.97, side: T.DoubleSide });
+  const sidewalkMaterial = new T.MeshStandardMaterial({ color: '#b4aa98', roughness: 0.94, side: T.DoubleSide });
+  const curbMaterial = new T.MeshStandardMaterial({ color: '#d2cabb', roughness: 0.92, side: T.DoubleSide });
+  const lanePaintMaterial = new T.MeshStandardMaterial({ color: '#e5c76c', roughness: 0.9 });
+  const crosswalkMaterial = new T.MeshStandardMaterial({ color: '#f4eee0', roughness: 0.9 });
+  const roadWidth = 5.6;
+  const roadCurve = addPath('ParkPerimeterRoad', ringPoints(roadHalf, 9), {
+    closed: true, width: roadWidth, lift: 0.026, material: asphaltMaterial, trackClearance: false,
+  });
+  const roadLength = roadCurve.getLength();
+  addPath('ParkInnerSidewalk', ringPoints(24.8, 7.5), {
+    closed: true, width: 1.8, lift: 0.022, material: sidewalkMaterial, trackClearance: false,
+  });
+  addPath('ParkOuterSidewalk', ringPoints(32.3, 9.5), {
+    closed: true, width: 1.6, lift: 0.02, material: sidewalkMaterial, trackClearance: false,
+  });
+  addPath('ParkInnerCurb', ringPoints(25.72, 7.5), {
+    closed: true, width: 0.14, lift: 0.032, material: curbMaterial, trackClearance: false,
+  });
+  addPath('ParkOuterCurb', ringPoints(31.48, 9.5), {
+    closed: true, width: 0.14, lift: 0.032, material: curbMaterial, trackClearance: false,
+  });
+
+  const dashCount = Math.floor(roadLength / 7.5);
+  const laneDashes = new T.InstancedMesh(new T.BoxGeometry(1.35, 0.012, 0.07), lanePaintMaterial, dashCount);
+  const roadMarker = new T.Object3D();
+  const roadMarkerPoint = new T.Vector3();
+  const roadMarkerTangent = new T.Vector3();
+  for (let i = 0; i < dashCount; i++) {
+    const u = (i + 0.5) / dashCount;
+    roadCurve.getPointAt(u, roadMarkerPoint);
+    roadCurve.getTangentAt(u, roadMarkerTangent);
+    roadMarker.position.set(roadMarkerPoint.x, parkHeightAt(roadMarkerPoint.x, roadMarkerPoint.z) + 0.041, roadMarkerPoint.z);
+    roadMarker.rotation.y = Math.atan2(-roadMarkerTangent.z, roadMarkerTangent.x);
+    roadMarker.updateMatrix();
+    laneDashes.setMatrixAt(i, roadMarker.matrix);
+  }
+  laneDashes.name = 'PerimeterRoadCenterMarks';
+  laneDashes.instanceMatrix.needsUpdate = true;
+  laneDashes.receiveShadow = true;
+  scene.add(laneDashes);
+
+  const zebraCount = 4 * 7;
+  const zebraStripes = new T.InstancedMesh(new T.BoxGeometry(0.42, 0.014, 5.1), crosswalkMaterial, zebraCount);
+  const crossings = [
+    { x: 0, z: -roadHalf, alongX: true }, { x: 0, z: roadHalf, alongX: true },
+    { x: -roadHalf, z: 12.5, alongX: false }, { x: roadHalf, z: 12.5, alongX: false },
+  ];
+  let zebraIndex = 0;
+  for (const crossing of crossings) for (let stripe = 0; stripe < 7; stripe++) {
+    const offset = (stripe - 3) * 0.76;
+    const x = crossing.x + (crossing.alongX ? offset : 0);
+    const z = crossing.z + (crossing.alongX ? 0 : offset);
+    roadMarker.position.set(x, parkHeightAt(x, z) + 0.046, z);
+    roadMarker.rotation.y = crossing.alongX ? 0 : Math.PI / 2;
+    roadMarker.updateMatrix();
+    zebraStripes.setMatrixAt(zebraIndex++, roadMarker.matrix);
+  }
+  zebraStripes.name = 'ParkRoadCrosswalks';
+  zebraStripes.instanceMatrix.needsUpdate = true;
+  zebraStripes.receiveShadow = true;
+  scene.add(zebraStripes);
+
+  const busStop = new T.Group();
+  busStop.name = 'CafeBusStop';
+  const busStopMetal = new T.MeshStandardMaterial({ color: '#45575a', roughness: 0.72, metalness: 0.35 });
+  const busStopSign = new T.Mesh(new T.BoxGeometry(0.42, 0.58, 0.06), new T.MeshStandardMaterial({ color: '#3b7180', roughness: 0.72 }));
+  busStopSign.position.set(0, 1.78, 0);
+  busStopSign.name = 'BusStopSign';
+  const busStopPost = new T.Mesh(new T.CylinderGeometry(0.025, 0.035, 2.15, 8), busStopMetal);
+  busStopPost.position.y = 1.075;
+  busStopPost.name = 'BusStopPost';
+  const busStopBench = new T.Mesh(new T.BoxGeometry(1.25, 0.08, 0.34), new T.MeshStandardMaterial({ color: '#805033', roughness: 0.86 }));
+  busStopBench.position.set(-0.75, 0.23, 0.25);
+  busStopBench.name = 'BusStopBench';
+  busStop.add(busStopSign, busStopPost, busStopBench);
+  busStop.position.set(-8.5, parkHeightAt(-8.5, 32.7), 32.7);
+  setShadows(busStop);
+  scene.add(busStop);
+  obstacles.push({ x: -8.5, z: 32.7, r: 0.25 });
+
+  const hydrantSize = new T.Box3().setFromObject(hydrantAsset.scene).getSize(new T.Vector3());
+  const hydrantScale = 0.68 / Math.max(hydrantSize.y, 0.01);
+  addParkAsset(hydrantAsset, 'RoadHydrantWest', -32.3, 10.3, hydrantScale, Math.PI / 2);
+  addParkAsset(hydrantAsset, 'RoadHydrantEast', 32.3, 14.7, hydrantScale, -Math.PI / 2);
+
+  const streetBin = new T.Group();
+  streetBin.name = 'CafeStreetBin';
+  const binBody = new T.Mesh(new T.BoxGeometry(0.34, 0.52, 0.34), new T.MeshStandardMaterial({ color: '#4e635d', roughness: 0.88 }));
+  binBody.position.y = 0.26;
+  const binLid = new T.Mesh(new T.BoxGeometry(0.38, 0.045, 0.38), new T.MeshStandardMaterial({ color: '#313c38', roughness: 0.78 }));
+  binLid.position.y = 0.54;
+  streetBin.add(binBody, binLid);
+  streetBin.position.set(-6.9, parkHeightAt(-6.9, 32.7), 32.7);
+  setShadows(streetBin);
+  scene.add(streetBin);
+
+  const addParkingBay = (name, x, z) => {
+    const bay = new T.Mesh(new T.BoxGeometry(6.1, 0.024, 2.5), asphaltMaterial);
+    bay.name = `${name}Pad`;
+    bay.position.set(x, parkHeightAt(x, z) + 0.034, z);
+    bay.receiveShadow = true;
+    scene.add(bay);
+    const lineMaterial = new T.MeshStandardMaterial({ color: '#e9e1cf', roughness: 0.9 });
+    for (const dx of [-2.85, 2.85]) {
+      const line = new T.Mesh(new T.BoxGeometry(0.07, 0.012, 2.25), lineMaterial);
+      line.name = `${name}Marking`;
+      line.position.set(x + dx, parkHeightAt(x + dx, z) + 0.052, z);
+      scene.add(line);
+    }
+  };
+  addParkingBay('CafeParkingBay', 7, 33.25);
+  addParkingBay('SouthParkingBay', 4, -33.25);
+  const parkedKia = addRoadVehicle(kiaCarAsset, 'ParkedKiaForte');
+  parkedKia.position.set(7, parkHeightAt(7, 33.25) + 0.02, 33.25);
+  parkedKia.rotation.y = 0;
+  const southKia = addRoadVehicle(kiaCarAsset, 'SouthKiaForte');
+  southKia.position.set(4, parkHeightAt(4, -33.25) + 0.02, -33.25);
+  southKia.rotation.y = Math.PI;
+  const movingKia = addRoadVehicle(kiaCarAsset, 'MovingKiaForte');
+  const trafficPoint = new T.Vector3();
+  const trafficTangent = new T.Vector3();
+  const trafficQuat = new T.Quaternion();
+  const trafficUp = new T.Vector3(0, 1, 0);
+  const trafficForward = new T.Vector3(-1, 0, 0);
+  const trafficLength = roadCurve.getLength();
+  const trafficSpeed = 3.6;
+  movingKia.userData.traffic = true;
+  movingKia.userData.trafficPhase = 0.08;
 
   const mochiStoolPosition = { x: 2.8, z: 19.8 };
   const mochiStool = new T.Group();
@@ -1970,6 +2124,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch;
     }
+    const trafficU = (t * trafficSpeed / trafficLength + movingKia.userData.trafficPhase) % 1;
+    roadCurve.getPointAt(trafficU, trafficPoint);
+    roadCurve.getTangentAt(trafficU, trafficTangent);
+    const trafficX = trafficPoint.x - trafficTangent.z * 1.3;
+    const trafficZ = trafficPoint.z + trafficTangent.x * 1.3;
+    movingKia.position.set(trafficX, parkHeightAt(trafficX, trafficZ) + 0.02, trafficZ);
+    trafficQuat.setFromUnitVectors(trafficForward, trafficTangent);
+    movingKia.quaternion.copy(trafficQuat);
     updateMrLeePatrol(dt);
     for (const mixer of mixers) mixer.update(dt);
     if (walkingCharacters.has('Ted')) groundTedDuringStand();

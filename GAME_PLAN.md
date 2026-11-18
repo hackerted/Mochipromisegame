@@ -77,6 +77,8 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 **Scope boundary:** The road is scenery and safe perimeter access for this pass; cars do not drive through the park or collide with the story characters. The four pedestrian crossings connect the park to the cafe-side and neighborhood sidewalks. Revisit playable city travel as a separate stage.
 
+**Built in this pass:** A rounded two-way road loop, sidewalks, lane dashes, four zebra crossings with paths connected to the outer sidewalk, two marked parking bays with parked Kia Forte cars, one slow Kia Forte on the loop, two hydrants, a cafe bus-stop sign and a street bin. The city bus and raised curb ramps remain future dressing.
+
 ## Decisions still open
 
 - Confirm the exact spoken wording and meaning of the reciprocal mochi promise.
