@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { buildAuditionStage } from './audition-stage.js';
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const sooAhStandSpeed = 4;
@@ -225,6 +226,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const scene = new T.Scene();
   scene.background = new T.Color('#d9e9f2');
   scene.fog = new T.Fog('#d9e9f2', 45, 160);
+  const auditionScene = new T.Scene();
+  auditionScene.background = new T.Color('#111a2c');
+  auditionScene.fog = new T.Fog('#111a2c', 35, 90);
+  const { root: auditionStage, figure: tedAuditionFigure } = buildAuditionStage(T);
+  auditionStage.position.set(0, 0, 0);
+  auditionStage.visible = false;
+  auditionScene.add(auditionStage);
 
   const hemi = new T.HemisphereLight('#fff5e9', '#77736c', 2.2);
   scene.add(hemi);
@@ -340,6 +348,19 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     TedStandToSit: { url: './assets/animations/ted/ted-stand-to-sit.glb', type: 'gltf' },
     TedNervous: { url: './assets/animations/ted/ted-nervous-look-around.glb', type: 'gltf' },
     TedTerrified: { url: './assets/animations/ted/ted-terrified.glb', type: 'gltf' },
+    TedAuditionWalk: { url: './assets/animations/audition/ted/ted-walk.glb', type: 'gltf' },
+    TedAuditionSinging: { url: './assets/animations/audition/ted/ted-singing.glb', type: 'gltf' },
+    TedGangnamStyle: { url: './assets/animations/audition/ted/ted-gangnam-style.glb', type: 'gltf' },
+    TedThumbsUp: { url: './assets/animations/audition/ted/ted-thumbs-up.glb', type: 'gltf' },
+    TedHappyGesture: { url: './assets/animations/audition/ted/ted-happy-gesture.glb', type: 'gltf' },
+    SooAhAuditionTerrified: { url: './assets/animations/audition/soo-ah/sooah-terrified.glb', type: 'gltf' },
+    SooAhAuditionHappy: { url: './assets/animations/audition/soo-ah/sooah-happy.glb', type: 'gltf' },
+    SooAhHipHop: { url: './assets/animations/audition/soo-ah/sooah-hip-hop.glb', type: 'gltf' },
+    SooAhJazz: { url: './assets/animations/audition/soo-ah/sooah-jazz.glb', type: 'gltf' },
+    SooAhStepHipHop: { url: './assets/animations/audition/soo-ah/sooah-step-hip-hop.glb', type: 'gltf' },
+    SooAhAuditionSinging: { url: './assets/animations/audition/soo-ah/sooah-singing.glb', type: 'gltf' },
+    SooAhAuditionIdle: { url: './assets/animations/audition/soo-ah/sooah-idle.glb', type: 'gltf' },
+    SooAhVictory: { url: './assets/animations/audition/soo-ah/sooah-victory.glb', type: 'gltf' },
     MrLeeWalk: { url: './assets/clips/MrLeeWalk.json', type: 'json' },
     MrLeeRun: { url: './assets/clips/MrLeeRun.json', type: 'json' },
     MrLeeAngryPoint: { url: './assets/clips/MrLeeAngryPoint.json', type: 'json' },
@@ -1086,6 +1107,64 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     return clipLoads[name];
   };
+  let auditionLoadPromise = null;
+  const auditionClipNames = [
+    'TedAuditionWalk', 'TedAuditionSinging', 'TedGangnamStyle', 'TedThumbsUp', 'TedHappyGesture',
+    'SooAhAuditionTerrified', 'SooAhAuditionHappy', 'SooAhHipHop', 'SooAhJazz',
+    'SooAhStepHipHop', 'SooAhAuditionSinging', 'SooAhAuditionIdle', 'SooAhVictory',
+  ];
+  async function loadAuditionAssets() {
+    if (auditionLoadPromise) return auditionLoadPromise;
+    auditionLoadPromise = (async () => {
+      const [tedAsset, sooAhAsset] = await Promise.all([
+        gltf(gltfLoader, './assets/characters/audition/ted-kpop-stage.glb'),
+        gltf(gltfLoader, './assets/characters/audition/soo-ah-kpop-stage.glb'),
+        ...auditionClipNames.map(ensureClip),
+      ]);
+      const roots = { Ted: tedAsset.scene, SooAh: sooAhAsset.scene };
+      for (const [name, root] of Object.entries(roots)) {
+        fitToHeight(root, 1.52);
+        root.name = `${name}KpopAudition`;
+        root.visible = false;
+        setShadows(root);
+        auditionScene.add(root);
+        auditionRoots[name] = root;
+        auditionMixers[name] = new T.AnimationMixer(root);
+        mixers.push(auditionMixers[name]);
+      }
+      for (const name of auditionClipNames) auditionClips[name] = inPlaceFbxWalk(clips[name]);
+      const rightHand = 'mixamorigrighthand';
+      auditionRoots.Ted.traverse((node) => {
+        if (node.isBone && node.name.toLowerCase().replace(/[^a-z]/g, '').endsWith(rightHand)) auditionHands.Ted = node;
+      });
+      characterRoots.Ted = auditionRoots.Ted;
+      characterRoots.SooAh = auditionRoots.SooAh;
+      return true;
+    })().catch((error) => {
+      auditionLoadPromise = null;
+      throw error;
+    });
+    return auditionLoadPromise;
+  }
+  function playAuditionClip(actor, name, { loop = false, speed = 1, fade = 0.24 } = {}) {
+    const mixer = auditionMixers[actor];
+    const clip = auditionClips[name];
+    if (!mixer || !clip) return null;
+    const previous = auditionActions[actor];
+    if (auditionCurrentClip[actor] === name && previous?.isRunning()) {
+      return { action: previous, duration: Math.max(clip.duration / Math.max(speed, 0.01), 0.25) };
+    }
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(loop ? T.LoopRepeat : T.LoopOnce, loop ? Infinity : 1);
+    action.clampWhenFinished = !loop;
+    if (previous && previous !== action) previous.fadeOut(fade);
+    action.timeScale = speed;
+    action.fadeIn(fade).play();
+    auditionActions[actor] = action;
+    auditionCurrentClip[actor] = name;
+    return { action, duration: Math.max(clip.duration / Math.max(speed, 0.01), 0.25) };
+  }
   // Startup waits only for what Begin needs (Ted's seated idle drives the mixer setup below; each
   // character's sit-to-stand plays on Begin). The rest load later: see preloadSoon at the end.
   await Promise.all(['TedSitting', 'SooAhSitToStand', 'TedSitToStand'].map(ensureClip));
@@ -1196,6 +1275,35 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   let mochiCameraTarget = null;
   const standingCharacters = new Set();
   const characterRoots = { SooAh: sooAh, Ted: tedRoot };
+  const parkCharacterRoots = { SooAh: sooAh, Ted: tedRoot };
+  const auditionRoots = { SooAh: null, Ted: null };
+  const auditionMixers = { SooAh: null, Ted: null };
+  const auditionActions = { SooAh: null, Ted: null };
+  const auditionCurrentClip = { SooAh: null, Ted: null };
+  const auditionHands = { Ted: null };
+  const auditionClips = {};
+  const audition = {
+    active: false,
+    pending: false,
+    phase: 'park',
+    elapsed: 0,
+    phaseDuration: 0,
+    sequence: [],
+    cueIndex: 0,
+    cueTimer: 0,
+    cueInterval: 1.45,
+    cueAnswered: false,
+    score: 0,
+    section: -1,
+    run: 0,
+    autoSection: 0,
+    walking: false,
+    figureTransition: null,
+    message: '',
+  };
+  const auditionStageTop = 0.38;
+  const auditionStageZ = 0;
+  let auditionTime = 0;
   const mochiMouthWorld = new T.Vector3();
   const mochiMouthLocal = new T.Vector3();
   const heldMochiWorld = new T.Vector3();
@@ -1682,6 +1790,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function walkSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
+    if (audition.pending) return false;
+    if (audition.active) return walkAuditionSelected({ directionX, directionZ, dt, run });
     const name = selectedCharacter;
     const mixer = characterMixers[name];
     if (!mixer || emotionalStates[name]?.blocksMovement) return false;
@@ -1775,6 +1885,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function look(dx, dy) {
+    if (audition.active) return;
     if (followCamera.mode !== 'free') {
       followCamera.angle -= dx * 0.005;
       followCamera.targetAngle -= dx * 0.005;
@@ -1785,7 +1896,324 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     player.pitch = clamp(player.pitch - dy * 0.0018, -0.85, 0.48);
   }
 
+  function setAuditionPhase(phase, actor, clipName, { speed = 1, loop = false, message: line = '', duration = null } = {}) {
+    audition.phase = phase;
+    audition.elapsed = 0;
+    const playback = actor && clipName ? playAuditionClip(actor, clipName, { loop, speed }) : null;
+    audition.phaseDuration = duration ?? playback?.duration ?? 0;
+    if (line) message = line;
+  }
+
+  function holdTedFigure() {
+    const hand = auditionHands.Ted;
+    tedAuditionFigure.visible = true;
+    tedAuditionFigure.scale.setScalar(0.5);
+    if (hand) {
+      hand.add(tedAuditionFigure);
+      tedAuditionFigure.position.set(0, -0.025, 0.09);
+      tedAuditionFigure.rotation.set(0, 0, 0);
+    }
+  }
+
+  function placeTedFigure() {
+    tedAuditionFigure.visible = true;
+    if (tedAuditionFigure.parent !== auditionStage) auditionStage.attach(tedAuditionFigure);
+    const from = tedAuditionFigure.position.clone();
+    audition.figureTransition = {
+      from,
+      to: new T.Vector3(3.2, auditionStageTop, 2.3),
+      elapsed: 0,
+      duration: 0.8,
+    };
+  }
+
+  function beginTedSinging() {
+    setAuditionPhase('ted-singing', 'Ted', 'TedAuditionSinging', {
+      speed: 3.2,
+      message: 'Ted starts to sing, giving Soo-ah a moment to breathe.',
+    });
+  }
+
+  function beginTedDance() {
+    holdTedFigure();
+    setAuditionPhase('ted-dance', 'Ted', 'TedGangnamStyle', {
+      speed: 2.35,
+      message: 'Ted launches into his Gangnam Style dance.',
+    });
+  }
+
+  function beginTedThumbsUp() {
+    placeTedFigure();
+    setAuditionPhase('ted-thumbs-up', 'Ted', 'TedThumbsUp', {
+      speed: 1.7,
+      message: 'Ted gives Soo-ah a thumbs-up.',
+    });
+  }
+
+  function beginTedLine() {
+    setAuditionPhase('ted-line', 'Ted', 'TedHappyGesture', {
+      speed: 1.45,
+      message: 'Ted: “Over to you, chipmunk.”',
+      duration: 2.8,
+    });
+  }
+
+  function beginSooAhHappy() {
+    setAuditionPhase('sooah-happy', 'SooAh', 'SooAhAuditionHappy', {
+      speed: 3.1,
+      message: 'Soo-ah smiles and finds her courage.',
+    });
+  }
+
+  const sooAhDanceSections = [
+    ['SooAhAuditionSinging', 3.2],
+    ['SooAhHipHop', 2.35],
+    ['SooAhJazz', 1.15],
+    ['SooAhStepHipHop', 2.8],
+    ['SooAhVictory', 2.7],
+  ];
+
+  function startSooAhAutoSection(index) {
+    if (index >= sooAhDanceSections.length) {
+      audition.phase = 'complete';
+      audition.elapsed = 0;
+      audition.phaseDuration = 0;
+      message = 'Soo-ah completes her audition to warm applause.';
+      return;
+    }
+    audition.autoSection = index;
+    const [clip, speed] = sooAhDanceSections[index];
+    const line = index === 0 ? 'Soo-ah begins to sing.'
+      : index === 4 ? 'Soo-ah strikes a confident finishing pose.' : 'Soo-ah dances on the beat.';
+    setAuditionPhase('sooah-auto', 'SooAh', clip, { speed, message: line });
+  }
+
+  function startSooAhAutoPerformance() {
+    startSooAhAutoSection(0);
+  }
+
+  function startSooAhQteSection(section) {
+    const clipsForQte = ['SooAhAuditionSinging', 'SooAhHipHop', 'SooAhJazz', 'SooAhStepHipHop'];
+    if (section >= clipsForQte.length) return;
+    audition.section = section;
+    const speeds = [3.2, 2.35, 1.15, 2.8];
+    playAuditionClip('SooAh', clipsForQte[section], { loop: true, speed: speeds[section] });
+  }
+
+  function finishSooAhQte() {
+    const result = audition.score >= 5 ? 'Soo-ah finishes with a confident smile.' : 'Soo-ah finds her voice and finishes the song.';
+    setAuditionPhase('sooah-finale', 'SooAh', 'SooAhVictory', {
+      speed: 2.7,
+      message: result,
+    });
+  }
+
+  function advanceSooAhCue(missed = false) {
+    if (missed) message = 'Keep going; the next beat is coming.';
+    audition.cueIndex++;
+    audition.cueTimer = 0;
+    audition.cueAnswered = false;
+    if (audition.cueIndex >= audition.sequence.length) {
+      finishSooAhQte();
+      return;
+    }
+    const section = Math.floor(audition.cueIndex / 2);
+    if (section !== audition.section) startSooAhQteSection(section);
+  }
+
+  function startSooAhQte() {
+    audition.phase = 'sooah-qte';
+    audition.elapsed = 0;
+    audition.cueIndex = 0;
+    audition.cueTimer = 0;
+    audition.cueAnswered = false;
+    audition.cueInterval = 2.0;
+    audition.score = 0;
+    const random = seededRandom(0x4e4f5641 + Math.floor(auditionTime * 1000) + audition.run * 97 + (selectedCharacter === 'Ted' ? 1 : 2));
+    const choices = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+    audition.sequence = Array.from({ length: 8 }, () => choices[Math.floor(random() * choices.length)]);
+    audition.section = -1;
+    startSooAhQteSection(0);
+    message = 'Soo-ah begins her audition. Follow the arrows with the beat.';
+  }
+
+  function startAudition() {
+    if (audition.active || audition.pending) return true;
+    if (!auditionAccepted) return false;
+    audition.pending = true;
+    message = 'The next morning, Ted and Soo-ah arrive at NOVA.';
+    loadAuditionAssets().then(() => {
+      audition.pending = false;
+      audition.active = true;
+      audition.run++;
+      auditionStage.visible = true;
+      parkCharacterRoots.Ted.visible = false;
+      parkCharacterRoots.SooAh.visible = false;
+      mrLeeRoot.visible = false;
+      mrLeePatrolling = false;
+      walkingCharacters.clear();
+      turningCharacters.clear();
+      standingCharacters.clear();
+      standingReady.clear();
+      sittingCharacters.clear();
+      sittingDown.clear();
+      for (const collection of [turnStates, facingTargets, fadingMovement, movementModes, pendingMoves]) {
+        for (const name of Object.keys(collection)) delete collection[name];
+      }
+      for (const name of ['SooAh', 'Ted']) {
+        characterRoots[name] = auditionRoots[name];
+        auditionRoots[name].visible = true;
+        auditionRoots[name].position.set(0, auditionStageTop, auditionStageZ);
+        auditionRoots[name].rotation.y = 0;
+        sittingTalkTimers[name] = 0;
+        auditionActions[name] = null;
+        auditionCurrentClip[name] = null;
+      }
+      auditionStage.updateMatrixWorld(true);
+      auditionStage.add(tedAuditionFigure);
+      tedAuditionFigure.visible = false;
+      tedAuditionFigure.scale.setScalar(0.5);
+      tedAuditionFigure.position.set(3.2, auditionStageTop, 2.3);
+      tedAuditionFigure.rotation.set(0, 0, 0);
+      audition.figureTransition = null;
+      followCamera.mode = 'front';
+      followCamera.angle = 0;
+      followCamera.targetAngle = 0;
+      followCamera.pitch = 0.1;
+      followCamera.distance = 5.8;
+      player.yaw = 0;
+      player.pitch = 0.1;
+      const ted = auditionRoots.Ted;
+      const sooAhActor = auditionRoots.SooAh;
+      if (selectedCharacter === 'Ted') {
+        ted.position.set(0, auditionStageTop, auditionStageZ + 4.1);
+        ted.rotation.y = Math.PI;
+        sooAhActor.position.set(1.4, auditionStageTop, auditionStageZ + 0.6);
+        sooAhActor.rotation.y = 0;
+        audition.phase = 'ted-enter-player';
+        playAuditionClip('Ted', 'TedHappyGesture', { loop: true, speed: 1.2 });
+        message = 'Soo-ah freezes under the stage lights. Walk Ted to his mark.';
+      } else {
+        ted.position.set(-5.4, auditionStageTop, auditionStageZ + 0.6);
+        ted.rotation.y = Math.PI / 2;
+        sooAhActor.position.set(1.2, auditionStageTop, auditionStageZ + 0.6);
+        sooAhActor.rotation.y = 0;
+        audition.phase = 'ted-enter-npc';
+        audition.elapsed = 0;
+        audition.phaseDuration = 2.3;
+        playAuditionClip('Ted', 'TedAuditionWalk', { loop: true, speed: 1.25 });
+        message = 'Soo-ah steps on stage and freezes as Ted comes to help.';
+      }
+      playAuditionClip('SooAh', 'SooAhAuditionTerrified', { loop: true, speed: 1.35 });
+    }).catch((error) => {
+      audition.pending = false;
+      message = 'The NOVA audition scene could not load.';
+      console.error(error);
+    });
+    return true;
+  }
+
+  function walkAuditionSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
+    if (selectedCharacter !== 'Ted' || audition.phase !== 'ted-enter-player') return false;
+    const root = auditionRoots.Ted;
+    const length = Math.hypot(directionX, directionZ);
+    if (length < 0.01) {
+      if (audition.walking) {
+        audition.walking = false;
+        playAuditionClip('Ted', 'TedHappyGesture', { loop: true, speed: 1.2 });
+      }
+      return false;
+    }
+    if (!audition.walking) {
+      audition.walking = true;
+      playAuditionClip('Ted', 'TedAuditionWalk', { loop: true, speed: run ? 1.45 : 1.1 });
+    }
+    const x = directionX / length;
+    const z = directionZ / length;
+    root.rotation.y = Math.atan2(x, z);
+    const speed = run ? 3.0 : 2.0;
+    root.position.x = clamp(root.position.x + x * speed * dt, -5.8, 5.8);
+    root.position.z = clamp(root.position.z + z * speed * dt, auditionStageZ - 1.2, auditionStageZ + 4.1);
+    if (root.position.z <= auditionStageZ + 0.95) {
+      root.position.z = auditionStageZ + 0.95;
+      root.position.x = -1.1;
+      root.rotation.y = 0;
+      audition.walking = false;
+      beginTedSinging();
+    }
+    return true;
+  }
+
+  function handleAuditionKey(key) {
+    if (!audition.active || audition.phase !== 'sooah-qte' || audition.cueAnswered) return false;
+    const normalized = String(key).toLowerCase();
+    if (!audition.sequence[audition.cueIndex]) return false;
+    audition.cueAnswered = true;
+    if (normalized === audition.sequence[audition.cueIndex]) {
+      audition.score++;
+      message = `On the beat · ${audition.score} moves hit.`;
+    } else {
+      message = 'Missed beat; keep dancing.';
+    }
+    return true;
+  }
+
+  function updateAudition(dt) {
+    if (!audition.active) return;
+    if (audition.figureTransition) {
+      const transition = audition.figureTransition;
+      transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
+      const t = transition.elapsed / transition.duration;
+      const eased = t * t * (3 - 2 * t);
+      tedAuditionFigure.position.lerpVectors(transition.from, transition.to, eased);
+      if (t >= 1) audition.figureTransition = null;
+    }
+    if (audition.phase === 'ted-enter-npc') {
+      audition.elapsed = Math.min(audition.phaseDuration, audition.elapsed + dt);
+      const t = audition.elapsed / audition.phaseDuration;
+      const eased = t * t * (3 - 2 * t);
+      auditionRoots.Ted.position.x = -5.4 + 4.2 * eased;
+      if (t >= 1) {
+        auditionRoots.Ted.rotation.y = 0;
+        beginTedSinging();
+      }
+      return;
+    }
+    if (audition.phase === 'ted-enter-player') return;
+    if (audition.phase === 'sooah-qte') {
+      audition.cueTimer += dt;
+      if (audition.cueTimer >= audition.cueInterval) advanceSooAhCue(!audition.cueAnswered);
+      return;
+    }
+    if (!audition.phaseDuration || audition.phase === 'complete') return;
+    audition.elapsed += dt;
+    if (audition.elapsed < audition.phaseDuration) return;
+    if (audition.phase === 'ted-singing') beginTedDance();
+    else if (audition.phase === 'ted-dance') beginTedThumbsUp();
+    else if (audition.phase === 'ted-thumbs-up') beginTedLine();
+    else if (audition.phase === 'ted-line') beginSooAhHappy();
+    else if (audition.phase === 'sooah-happy') {
+      if (selectedCharacter === 'SooAh') startSooAhQte();
+      else startSooAhAutoPerformance();
+    } else if (audition.phase === 'sooah-auto') startSooAhAutoSection(audition.autoSection + 1);
+    else if (audition.phase === 'sooah-finale') {
+      audition.phase = 'complete';
+      audition.elapsed = 0;
+      audition.phaseDuration = 0;
+      message = 'The NOVA audition is complete.';
+    }
+  }
+
   function interact() {
+    if (audition.pending) return true;
+    if (audition.active) {
+      if (audition.phase === 'ted-enter-player') {
+        if (auditionRoots.Ted.position.z <= auditionStageZ + 1.1) beginTedSinging();
+        else message = 'Walk Ted farther onto the stage first.';
+      }
+      return true;
+    }
+    if (auditionAccepted) return startAudition();
     if (mochiEating) {
       message = 'Soo-ah is taking a bite…';
       return true;
@@ -2095,6 +2523,36 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function hud() {
+    if (audition.pending) {
+      return { task: 'The next morning at NOVA', prompt: 'Preparing the audition stage…', message, hint: 'Loading Ted and Soo-ah’s performance clips.' };
+    }
+    if (audition.active) {
+      const arrow = { arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' };
+      const tasks = {
+        'ted-enter-player': 'Soo-ah is terrified · walk Ted onto the stage',
+        'ted-enter-npc': 'Soo-ah is terrified · Ted is coming to help',
+        'ted-singing': 'Ted sings to encourage Soo-ah',
+        'ted-dance': 'Ted performs Gangnam Style',
+        'ted-thumbs-up': 'Ted gives Soo-ah a thumbs-up',
+        'ted-line': 'Ted encourages Soo-ah',
+        'sooah-happy': 'Soo-ah finds her courage',
+        'sooah-auto': 'Soo-ah dances and sings',
+        'sooah-qte': `Soo-ah’s performance · ${audition.score} on beat`,
+        'sooah-finale': 'Soo-ah finishes her audition',
+        complete: 'Soo-ah completes the NOVA audition',
+      };
+      const prompt = audition.phase === 'ted-enter-player' ? '↑ · Walk Ted to the mark'
+        : audition.phase === 'sooah-qte'
+          ? `Beat ${Math.min(audition.cueIndex + 1, audition.sequence.length)}/${audition.sequence.length} · ${arrow[audition.sequence[audition.cueIndex]] ?? '♪'}`
+          : audition.phase === 'complete' ? 'Audition complete' : 'Watch the performance';
+      const hint = audition.phase === 'ted-enter-player'
+        ? 'Arrow keys walk Ted · F starts his song at the stage mark'
+        : audition.phase === 'sooah-qte' ? 'Press the shown arrow on each beat · missed cues never stop the audition' : 'Performance controls are active';
+      return { task: tasks[audition.phase] ?? 'NOVA audition', prompt, message, hint, selectedCharacter, standing: false, walkingReady: false };
+    }
+    if (auditionAccepted) {
+      return { task: 'The next morning, Ted and Soo-ah go to NOVA.', prompt: 'F · Go to the audition', message, selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
+    }
     const target = nearest();
     const label = selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah';
     const mode = characterMode[selectedCharacter];
@@ -2114,6 +2572,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function update(t, dt) {
+    auditionTime = t;
     const followed = characterRoots[selectedCharacter].position;
     sun.target.position.set(followed.x, 0, followed.z);
     sun.position.set(followed.x - 12, 20, followed.z + 16);
@@ -2134,6 +2593,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     movingKia.quaternion.copy(trafficQuat);
     updateMrLeePatrol(dt);
     for (const mixer of mixers) mixer.update(dt);
+    updateAudition(dt);
     if (walkingCharacters.has('Ted')) groundTedDuringStand();
     if (standRootTransitions.SooAh) groundSooAhDuringStand();
     if (standRootTransitions.Ted) groundTedDuringStand();
@@ -2365,6 +2825,19 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   const debug = {
+    startAudition: () => { auditionAccepted = true; return startAudition(); },
+    getAuditionState: () => ({
+      phase: audition.phase,
+      selectedCharacter,
+      camera: { position: camera.position.toArray(), angle: followCamera.angle, targetAngle: followCamera.targetAngle },
+      actors: Object.fromEntries(['Ted', 'SooAh'].map((name) => {
+        const root = auditionRoots[name];
+        if (!root) return [name, null];
+        root.updateMatrixWorld(true);
+        const box = new T.Box3().setFromObject(root);
+        return [name, { position: root.position.toArray(), rotation: root.rotation.y, scale: root.scale.toArray(), bounds: box.getSize(new T.Vector3()).toArray() }];
+      })),
+    }),
     getSeatState: (name = 'Ted') => getCharacterSeatState(name),
     setSideView: (name = 'Ted', distance = 2.2) => {
       followCamera.mode = 'free';
@@ -2707,5 +3180,5 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     },
   };
 
-  return { scene, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
+  return { get scene() { return audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
 }

@@ -68,7 +68,7 @@
   </main>
   <script type="module">
     import * as THREE from 'three';
-    import { createScene } from './src/scene.js?v=274';
+    import { createScene } from './src/scene.js?v=283';
 
     const canvas = document.querySelector('#game');
     const startScreen = document.querySelector('#startScreen');
@@ -77,6 +77,8 @@
     const errorBox = document.querySelector('#error');
     const task = document.querySelector('#task');
     const prompt = document.querySelector('#prompt');
+    const hint = document.querySelector('#hint');
+    const defaultHint = hint.textContent;
     const toast = document.querySelector('#toast');
     const playSooAh = document.querySelector('#playSooAh');
     const playTed = document.querySelector('#playTed');
@@ -119,6 +121,7 @@
       const state = game.hud();
       task.textContent = state.task;
       prompt.textContent = state.prompt;
+      hint.textContent = state.hint || defaultHint;
       prompt.classList.toggle('visible', Boolean(state.prompt));
       if (state.message !== lastMessage) {
         lastMessage = state.message;
@@ -143,6 +146,10 @@
         game.debug.captureScreenshot = (name) => saveDebugFile(name, JSON.stringify({ dataUrl: canvas.toDataURL('image/png') }));
         window.addEventListener('keydown', (event) => {
           if (event.repeat) return;
+          if (event.key.toLowerCase() === 'a') {
+            game.debug.startAudition();
+            return;
+          }
           if (event.key.toLowerCase() === 'v') {
             game.debug.setSideView('Ted');
             return;
@@ -187,9 +194,11 @@
         requestAnimationFrame(frame);
         const dt = Math.min(clock.getDelta(), 0.04);
         if (gameStarted) {
-          const forward = Number(keys.has('w')) - Number(keys.has('s'));
-          const strafe = Number(keys.has('d')) - Number(keys.has('a'));
-          game.move({ forward, strafe, dt, fast: keys.has('shift') });
+          if (!game.auditionActive()) {
+            const forward = Number(keys.has('w')) - Number(keys.has('s'));
+            const strafe = Number(keys.has('d')) - Number(keys.has('a'));
+            game.move({ forward, strafe, dt, fast: keys.has('shift') });
+          }
           const walkForward = Number(keys.has('arrowup')) - Number(keys.has('arrowdown'));
           const walkRight = Number(keys.has('arrowright')) - Number(keys.has('arrowleft'));
           const cameraYaw = game.player.yaw;
@@ -221,6 +230,12 @@
       const key = event.key.toLowerCase();
       keys.add(key);
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+      if (game && gameStarted && game.auditionActive()) {
+        if (!event.repeat && key.startsWith('arrow')) game.handleAuditionKey(key);
+        if (key === 'f' && !event.repeat) game.interact();
+        syncHud();
+        return;
+      }
       if (key === 'e' && !event.repeat && game && gameStarted && game.canStandSelected()) {
         game.standSelected();
         syncHud();

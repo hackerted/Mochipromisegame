@@ -81,7 +81,7 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 ## Next level: Home to the NOVA audition
 
-**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game.
+**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game. The current implementation slice transitions from the park ending straight to NOVA; the evening home scenes remain planned work.
 
 ### Story sequence
 
@@ -89,22 +89,20 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 2. **Go home that evening:** Show a short homecoming beat for both friends. Ted sets his Gundam figure aside and packs it; Soo-ah keeps the audition details and quietly rehearses. Use brief playable interactions or a compact montage rather than building two large explorable homes.
 3. **Meet the next morning:** Show a clear day-to-morning change. Ted and Soo-ah meet at a familiar street or transit landmark, then travel together to the NOVA building. The existing park roads can serve as the transition route; NOVA and its audition interior are new locations.
 4. **Soo-ah freezes:** At the audition, Soo-ah steps onto the stage, sees the judges and audience, and freezes. Give the player a brief moment to notice her fear before Ted helps.
-5. **Ted encourages her:** Ted hops onto the stage, performs a short original Gundam-inspired robot dance, places his figure upright at the stage edge as a good-luck charm, and says, “Good luck, chipmunk.” He exits the performance space so Soo-ah can take her turn. The interruption is affectionate and supportive, not a joke at her expense.
-6. **Soo-ah performs:** Soo-ah starts with a short dance and singing performance. Her confidence and animation build as the player follows the music cues. End with a warm audience/judge reaction and a clear sense that she completed the audition.
+5. **Ted encourages her:** If Ted is selected, the player walks him onto the stage. If Soo-ah is selected, Ted enters as an NPC. Ted sings, performs the supplied Gangnam Style dance, gives a thumbs-up, places his figure at the stage edge, and says, “Over to you, chipmunk.” Soo-ah changes from terrified to happy.
+6. **Soo-ah performs:** If Soo-ah is selected, the player follows a short arrow-key sequence through her singing, Hip Hop, Jazz, and Step Hip Hop clips. If Ted is selected, the same performance runs for Soo-ah as an NPC. Missed cues never block the ending.
 
 ### Dance and singing controls
 
-- Lock Soo-ah’s walking and camera controls during the performance. Temporarily use the four arrow keys for the audition prompts, then restore the normal controls when the scene ends.
-- First preview the actual animations available after Soo-ah is auto-rigged. Choose the routine from those clips; do not assume Mixamo has a separate clip for every step or gesture. Adjust the selected clip’s speed and arm spacing in Mixamo where useful.
-- Show a small sequence of randomized arrow prompts with a beat indicator. Tie cues to beats in the selected clip and song. Prompts can affect timing, confidence, and which part of an available clip plays; they must not request a move with no matching animation.
-- Use one suitable dance clip for the main routine. For singing, use a singing/performance clip only if one is available and fits. Otherwise, keep a simple dance/standing clip running and add the mic, head, and free-hand gestures as a small custom Blender animation on the rig.
-- Keep it forgiving: a missed or wrong key causes a small stumble or lower flourish, then Soo-ah recovers and continues. Never reset the audition or block the story ending. Use the final result for a subtle animation and audience-reaction variation, not for whether she succeeds.
-- Add a brief practice cue before the scored performance. Make the prompts visible and repeat the cue if the player misses several inputs, so the sequence is understandable without musical timing experience.
+- Lock camera movement during the stage scene. In Ted’s route, arrows walk Ted to his mark. In Soo-ah’s route, arrows are reserved for the performance prompts; normal movement returns outside the audition.
+- The current QTE shows one randomized arrow at a time, with a two-second response window. A correct key raises her on-beat count; a wrong or missed key advances to the next cue without stopping the dance.
+- Advance between supplied animations in short sections: Singing, Hip Hop Dancing, Jazz Dancing, and Step Hip Hop Dance. Use the exact clips present in the new folders; do not rely on a separate clip for each arrow direction.
+- The current cues use a steady timer because no audition music file has been added yet. When music is supplied, align the cue interval to its tempo.
 
 ### Assets and audio to review
 
 - **NOVA venue:** exterior entrance/sign, audition room, stage, curtains/backdrop, judges’ table and chairs, a modest audience, stage lights, speakers, and a microphone or stand.
-- **Characters:** After Soo-ah is auto-rigged, review the real Mixamo library and record the exact clip names that work on her. Prefer one suitable dance clip over a list of assumed moves. Singing, freeze/startle, recovery, Ted’s robot dance, and figure-placement gestures may need short custom Blender keys if no matching library clip is available. Check facial or mouth movement separately; a full-body clip does not guarantee singing or lip sync. Verify retargeting and forward axes before use.
+- **Characters:** The supplied `tedkpopaudtion` and `kpopaudtionsooah` FBXs provide Ted walking, singing, Gangnam Style, thumbs-up, and happy hand gestures; Soo-ah terrified, happy, idle, singing, Hip Hop, Jazz, Step Hip Hop, and victory clips. The game uses rigged GLB models plus compact animation-only GLBs extracted from those FBXs. Singing currently means the supplied body animation; no audio or lip-sync clip is included yet.
 - **Story prop:** Ted’s Gundam figure, sized to read clearly in his hand and when placed on the stage edge. Keep it as a separate prop so the handoff/placement can be animated.
 - **Music:** user-selected, usable audio file plus its tempo or beat times. Check whether it includes vocals/backing vocals and whether Soo-ah’s animation should match the full track or a short audition excerpt. Keep the music choice open until the assets are reviewed.
 - **Home scenes:** small, reusable bedroom or home-corner assets for the evening beats; detailed home exploration is out of this level’s scope.
@@ -117,7 +115,7 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 4. After the user selects music and reviews the actual Mixamo clips, map prompts only to those clips and measured beat times. Add small Blender keys for missing story gestures. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
 5. Verify both prior routes reach this level once; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed and remains on stage; the correct line plays once; all prompt outcomes reach the same completed-audition ending; normal controls return afterward.
 
-**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. The animation and music assets are not chosen until the user has reviewed the available files.
+**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. Home scenes and music playback remain future work; the stage sequence already uses the reviewed animation files.
 
 ## Decisions still open
 
