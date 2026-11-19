@@ -66,3 +66,19 @@
 - Browser v337 followed the Ted-selected route through audition success and the school conversation; the cafe objective and minimap appeared at the south crossing. Arrow movement crossed the road with both characters visible, and the one-time first conversation displayed Soo-ah’s nervous line and Ted’s reassurance.
 - `node --check --input-type=module < src/scene.js` and `git diff --check` passed.
 - **Remaining browser check:** second conversation and arriving at the cafe entrance to verify the F handoff into the existing family scene.
+
+## Session: 2026-11-19 — The audition result at Lee’s Cafe
+- Reused the single street Cafe GLB and the existing textured Mrs Lee and talking Mr Lee FBX rigs; hid its street dressing while the story uses the cafe interior view and restored it on exit.
+- Added a modest counter, cups, warm light and entry walk. Mr Lee greets the pair from behind the counter; Soo-ah delivers the news, pauses for his reaction, and explains why singing, dancing and school all matter to her.
+- Added three accessible dialogue buttons with 1–3 keyboard alternatives. Each reply has a distinct parent response, then converges on the same undecided but hopeful ending.
+- Mrs Lee approaches Soo-ah and congratulates her. Mr Lee remains concerned about school and needs time to think; Ted supports Soo-ah without speaking over her.
+- F returns the same selected character pair to the existing street outside the cafe and restores the follow camera and movement controls. Story flags retain the audition result, selected response and told-parents state for the rest of the session.
+- Browser v342 checked four-character staging, the response choices, a selected-response path, the hopeful ending and return to street. The final v344 reload confirmed the cafe view, Mr Lee’s opening question and Soo-ah’s nervous line; no console errors were recorded.
+- `node --check --input-type=module < src/scene.js` and `git diff --check` passed.
+
+## Session: 2026-11-19 — Cafe audition-result scene
+- Inspected the existing Cafe GLB and confirmed the project already includes Mrs Lee’s textured Happy Gesture and Talking FBX clips plus Mr Lee’s talking home rig.
+- Reused and reparented the single Cafe model for the family scene. Added a modest serving counter, cups, floor and warm light because the GLB has a shop exterior/signage but no interior work counter.
+- Added an animated entrance, Mr Lee noticing the pair, the audition reveal and pause, Mrs Lee’s approach, the school/future explanation, three response choices, and a thoughtful non-approval ending.
+- Browser v342 verified all four characters inside the Cafe, the reveal pause, Mrs Lee’s approach, visible response buttons, keyboard selection, the family conversation ending, and F returning the selected character to the existing street scene. No console errors were recorded.
+- **Next:** check the final diff, static syntax, commit and push this branch; do not merge to `main`.

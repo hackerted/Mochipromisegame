@@ -63,5 +63,11 @@
 - The first browser pass showed an over-wide gap after turns. The player now pauses only when input would increase separation beyond 2.2 m, while the follower targets a small side-and-back offset and uses the existing turn/walk/run clips.
 - The minimap draws the player, the remaining route, and a `C` destination marker using the same world coordinates as the scene.
 
+## Cafe Result Scene Findings
+- The existing `assets/props/opt/korean_cafe.glb` is a small two-storey bakery/cafe model with a front door, bakery signage and upper floor. It has no working counter furniture or interior staging; the scene now moves this same cafe root indoors and adds only a counter, cups and floor.
+- The game already includes the textured Mrs Lee Happy Gesture FBX, her Talking FBX clip, Mr Lee’s Talking FBX rig and the school characters’ walk clips. The cafe scene uses those existing files.
+- At story end, the cafe root and the same two character roots return to their street positions; the selected character remains selected and the regular movement camera resumes.
+- `family.auditionResultTold`, the selected response and `school.auditionPassed` remain in story state after the scene transition. The choice replies converge on the same unresolved-but-hopeful ending.
+
 ## Resources
 -

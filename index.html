@@ -22,6 +22,12 @@
     #hint { padding: 8px 12px; font-size: 12px; color: #fffaf1c9; background: #25332e75; border-radius: 999px; }
     #toast { position: absolute; left: 50%; bottom: 105px; transform: translate(-50%, 10px); max-width: min(600px, calc(100vw - 36px)); padding: 13px 18px; border-radius: 14px; background: #fff9edee; color: #3c4238; text-shadow: none; line-height: 1.45; text-align: center; opacity: 0; transition: .2s ease; }
     #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+    .story-choices { position: absolute; z-index: 1; left: 50%; bottom: 160px; transform: translateX(-50%); width: min(590px, calc(100vw - 28px)); padding: 12px; display: grid; gap: 8px; border: 1px solid #ffffff55; border-radius: 17px; background: #25332eeF; box-shadow: 0 12px 35px #17201944; pointer-events: auto; }
+    .story-choices[hidden] { display: none; }
+    .story-choices-title { padding: 0 3px 3px; color: #f2c4ce; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+    .story-choices button { padding: 9px 12px; background: #f4eadf; color: #39463d; font-size: 12px; line-height: 1.35; text-align: left; }
+    .story-choices button:hover { background: #f3c7d0; }
+    .hud.choices-open #toast { opacity: 0; }
     .judge-scores { position: absolute; right: 18px; top: 18px; width: 238px; padding: 14px 16px; border: 1px solid #ffffff42; border-radius: 16px; background: #25332edb; backdrop-filter: blur(12px); box-shadow: 0 12px 35px #17201926; text-shadow: none; }
     .judge-scores[hidden] { display: none; }
     .judge-scores .brand { margin-bottom: 10px; }
@@ -78,12 +84,18 @@
       <div id="judgeVerdict">Scoring</div>
     </aside>
     <div id="crosshair"></div>
+    <section id="storyChoices" class="story-choices" role="group" aria-label="Soo-ah’s dialogue choices" hidden>
+      <div class="story-choices-title">How should Soo-ah explain herself?</div>
+      <button type="button" data-family-choice="0">1. I know you want me to do well at school, Appa. But I want to try this too.</button>
+      <button type="button" data-family-choice="1">2. I didn’t tell you because I was scared you wouldn’t understand.</button>
+      <button type="button" data-family-choice="2">3. I passed the audition. I just wanted you to be proud of me.</button>
+    </section>
     <div class="bottom"><div id="prompt"></div><div id="hint">Arrows move · Shift + arrows run · E stand · Q sit · F talk / mochi · 1–4 camera views · W/S zoom · A/D circle</div></div>
     <div id="toast"></div>
   </main>
   <script type="module">
     import * as THREE from 'three';
-    import { createScene } from './src/scene.js?v=337';
+    import { createScene } from './src/scene.js?v=344';
     import { drawMinimap } from './src/minimap.js';
 
     const canvas = document.querySelector('#game');
@@ -96,6 +108,9 @@
     const hint = document.querySelector('#hint');
     const defaultHint = hint.textContent;
     const minimap = document.querySelector('#minimap');
+    const hudRoot = document.querySelector('.hud');
+    const storyChoices = document.querySelector('#storyChoices');
+    const storyChoiceButtons = [...storyChoices.querySelectorAll('[data-family-choice]')];
     const toast = document.querySelector('#toast');
     const judgeScores = document.querySelector('#judgeScores');
     const judgeScoreRows = [...judgeScores.querySelectorAll('.judge-score-row strong')];
@@ -142,6 +157,9 @@
       task.textContent = state.task;
       prompt.textContent = state.prompt;
       hint.textContent = state.hint || defaultHint;
+      const choices = state.choices || [];
+      storyChoices.hidden = choices.length === 0;
+      hudRoot.classList.toggle('choices-open', choices.length > 0);
       judgeScores.hidden = !state.judgeScores;
       if (state.judgeScores) {
         state.judgeScores.rows.forEach((judge, index) => {
@@ -162,6 +180,11 @@
 
     try {
       game = await createScene({ THREE, renderer });
+      for (const button of storyChoiceButtons) {
+        button.addEventListener('click', () => {
+          if (game?.chooseFamilyResponse(Number(button.dataset.familyChoice))) syncHud();
+        });
+      }
       if (debugMode) {
         window.__game = game;
         const debugResults = document.createElement('textarea');
@@ -180,6 +203,10 @@
           }
           if (event.key.toLowerCase() === 'h') {
             game.debug.startHomeJourney();
+            return;
+          }
+          if (event.key.toLowerCase() === 'c') {
+            game.debug.startCafeStory();
             return;
           }
           if (event.key.toLowerCase() === 'j') {
@@ -279,6 +306,11 @@
       if (key === 'q' && !event.repeat && game && gameStarted && game.canSitSelected()) {
         game.sitSelected();
         syncHud();
+      }
+      if (['1', '2', '3'].includes(key) && !event.repeat && game && gameStarted && game.hud().choices?.length) {
+        game.chooseFamilyResponse(Number(key) - 1);
+        syncHud();
+        return;
       }
       const view = { '1': 'front', '2': 'left', '3': 'right', '4': 'back' }[key];
       if (view && game && gameStarted) game.setCameraView(view);

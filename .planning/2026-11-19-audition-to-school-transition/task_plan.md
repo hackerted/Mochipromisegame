@@ -4,10 +4,10 @@
 After a successful NOVA audition, show the judges accepting Soo-ah, let Ted and Soo-ah celebrate, then transition both playable routes into the existing school setting for a shared conversation about telling Mr. and Mrs. Lee.
 
 ## Next Step
-Finish the cafe-route review, then commit and push this feature branch; leave `main` unchanged.
+Commit and push the cafe-result scene on this feature branch; leave `main` unchanged.
 
 ## Current Phase
-Phase 8: Walk from school to Lee’s Cafe — implementation complete; browser verification in progress
+Phase 9: The audition result at Lee’s Cafe — complete
 
 ## Phases
 
@@ -65,7 +65,17 @@ Phase 8: Walk from school to Lee’s Cafe — implementation complete; browser v
 - [x] Show the cafe route, player marker and cafe goal on the minimap; gate F entry on both characters reaching the entrance
 - [x] Browser-check the Ted route handoff, street crossing, camera framing, companion follow and first conversation
 - [ ] Verify the second conversation and cafe-entry prompt in the browser
-- **Status:** implementation complete; final browser checks in progress
+- **Status:** implementation complete; the second optional route conversation remains unverified in the browser
+
+### Phase 9: The audition result at Lee’s Cafe
+- [x] Reuse the existing Cafe GLB and inspect the existing Mrs. Lee and Mr. Lee rigs/clips
+- [x] Move the single Cafe instance into the family story view and stage a counter, warm interior light and entrance walk
+- [x] Replace the abrupt refusal with a paced, supportive conversation and a reaction pause
+- [x] Add three Soo-ah response choices with distinct parent replies and shared progression
+- [x] Use existing parent/teen models, talking, nervous, supportive and walking animations
+- [x] Preserve audition/result/choice flags and return the characters to the street with movement controls restored
+- [x] Browser-check the Cafe scene, dialogue choices, Mrs. Lee’s approach, scene ending and return to street
+- **Status:** complete
 
 ## Decisions Made (continued)
 | Decision | Rationale |

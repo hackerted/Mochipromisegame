@@ -426,8 +426,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     SooAhVictory: { url: './assets/animations/audition/soo-ah/sooah-victory.glb', type: 'gltf' },
     MrLeeWalk: { url: './assets/clips/MrLeeWalk.json', type: 'json' },
     MrLeeRun: { url: './assets/clips/MrLeeRun.json', type: 'json' },
-    MrLeeAngryPoint: { url: './assets/clips/MrLeeAngryPoint.json', type: 'json' },
-    MrLeeAngryGesture: { url: './assets/clips/MrLeeAngryGesture.json', type: 'json' },
     MrLeePointing: { url: './assets/clips/MrLeePointing.json', type: 'json' },
     MrLeeTalking: { url: './assets/clips/MrLeeTalking.json', type: 'json' },
     MrsLeeTalking: { url: './assets/characters/mrs-lee-talking.fbx', type: 'fbx' },
@@ -480,6 +478,73 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   cafeRoot.add(cafe);
   setShadows(cafeRoot);
   scene.add(cafeRoot);
+  const cafeStreetTransform = {
+    position: cafeRoot.position.clone(),
+    rotation: cafeRoot.rotation.clone(),
+    scale: cafeRoot.scale.clone(),
+  };
+  const cafeExteriorNodes = ['particles_2', 'bike_front_3', 'bike_back_4', 'foilage_base_21', 'foilage_leafs_22',
+    'bakery_door_23', 'bakery_tent_26', 'pots_43', 'sidewalk_44', 'street_board_45'];
+  let cafeExteriorVisibility = [];
+  const setCafeInterior = (inside) => {
+    if (inside) {
+      cafeExteriorVisibility = cafeExteriorNodes.map((name) => cafeRoot.getObjectByName(name))
+        .filter(Boolean).map((node) => [node, node.visible]);
+      for (const [node] of cafeExteriorVisibility) node.visible = false;
+      cafeRoot.position.set(0, 0, 0);
+      cafeRoot.rotation.set(0, 0, 0);
+      cafeRoot.scale.setScalar(3);
+      familyGround.visible = false;
+      familyPath.visible = false;
+      familyHouse.visible = false;
+      familyScene.background.set('#e8ddd0');
+      familyScene.fog.color.set('#e8ddd0');
+      return;
+    }
+    for (const [node, visible] of cafeExteriorVisibility) node.visible = visible;
+    cafeExteriorVisibility = [];
+    cafeRoot.position.copy(cafeStreetTransform.position);
+    cafeRoot.rotation.copy(cafeStreetTransform.rotation);
+    cafeRoot.scale.copy(cafeStreetTransform.scale);
+    familyGround.visible = true;
+    familyPath.visible = true;
+    familyPath.position.y = -0.006;
+    familyHouse.visible = true;
+    familyScene.background.set('#d9e9f2');
+    familyScene.fog.color.set('#d9e9f2');
+  };
+  const cafeInteriorFloor = new T.Mesh(
+    new T.PlaneGeometry(5.8, 4.9),
+    new T.MeshStandardMaterial({ color: '#b2936d', roughness: 0.88 }),
+  );
+  cafeInteriorFloor.name = 'LeeCafeInteriorFloor';
+  cafeInteriorFloor.rotation.x = -Math.PI / 2;
+  cafeInteriorFloor.position.y = -0.012;
+  cafeInteriorFloor.receiveShadow = true;
+  familyScene.add(cafeInteriorFloor);
+  const cafeCounter = new T.Group();
+  cafeCounter.name = 'LeeCafeCounter';
+  const cafeCounterBody = new T.Mesh(new T.BoxGeometry(2.35, 0.86, 0.64), new T.MeshStandardMaterial({ color: '#765039', roughness: 0.82 }));
+  cafeCounterBody.position.set(0, 0.43, 0.34);
+  cafeCounterBody.name = 'LeeCafeCounterBody';
+  const cafeCounterTop = new T.Mesh(new T.BoxGeometry(2.48, 0.1, 0.72), new T.MeshStandardMaterial({ color: '#b88759', roughness: 0.7 }));
+  cafeCounterTop.position.set(0, 0.91, 0.34);
+  cafeCounterTop.name = 'LeeCafeCounterTop';
+  const cafeCupMaterial = new T.MeshStandardMaterial({ color: '#f0e7d6', roughness: 0.38 });
+  for (const x of [-0.7, 0.7]) {
+    const cup = new T.Mesh(new T.CylinderGeometry(0.055, 0.045, 0.12, 12), cafeCupMaterial);
+    cup.position.set(x, 1.02, 0.34);
+    cup.name = `LeeCafeCup${x < 0 ? 'Left' : 'Right'}`;
+    cafeCounter.add(cup);
+  }
+  cafeCounter.add(cafeCounterBody, cafeCounterTop);
+  cafeCounter.traverse((node) => { if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; } });
+  cafeCounter.position.z = 0.18;
+  familyScene.add(cafeCounter);
+  const cafeWarmLight = new T.PointLight('#ffd29c', 8, 8, 2);
+  cafeWarmLight.name = 'LeeCafeWarmLight';
+  cafeWarmLight.position.set(0, 3.1, 0.4);
+  familyScene.add(cafeWarmLight);
 
   function addParkAsset(asset, name, x, z, scale, yaw = 0) {
     const root = new T.Group();
@@ -1130,7 +1195,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const terrifiedClips = { SooAh: null, Ted: null };
   const sitToStandClips = { SooAh: null, Ted: null };
   const standToSitClips = { SooAh: null, Ted: null };
-  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null, talking: null, angryPoint: null, angryGesture: null };
+  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null, talking: null };
   const setLoadedClip = (name, clip) => {
     clips[name] = clip;
     if (name === 'SooAhWalk') walkingClips.SooAh = inPlaceFbxWalk(clip);
@@ -1165,8 +1230,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mrLeeClips.walk = inPlaceStandTransition(clip);
     }
     if (name === 'MrLeeTalking') mrLeeClips.talking = inPlaceStandTransition(clip);
-    if (name === 'MrLeeAngryPoint') mrLeeClips.angryPoint = inPlaceStandTransition(clip);
-    if (name === 'MrLeeAngryGesture') mrLeeClips.angryGesture = inPlaceStandTransition(clip);
     return clip;
   };
   const ensureClip = (name) => {
@@ -1354,23 +1417,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mrLeeAction = action;
     return true;
   }
-  function playMrLeeStoryGesture(mode) {
-    const clip = mrLeeClips[mode];
-    if (!clip) return family.active && mrLeeHomeMixer ? setMrLeeHomeMode('talking') : setMrLeeMode('talking');
-    const familySpeaker = family.active && mrLeeHomeMixer;
-    const mixer = familySpeaker ? mrLeeHomeMixer : mrLeeMixer;
-    const previous = familySpeaker ? mrLeeHomeAction : mrLeeAction;
-    const action = mixer.clipAction(clip);
-    action.reset();
-    action.setLoop(T.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
-    action.timeScale = 0.75;
-    if (previous) previous.fadeOut(0.14);
-    action.fadeIn(0.14).play();
-    if (familySpeaker) mrLeeHomeAction = action;
-    else mrLeeAction = action;
-    return true;
-  }
   setMrLeeMode('idle');
 
   const camera = new T.PerspectiveCamera(50, 1, 0.08, 170);
@@ -1433,18 +1479,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       'Soo-ah: Thank you. It helps knowing you are coming with me.',
     ] },
   ];
-  const family = { active: false, pending: false, phase: 'inactive', dialogueIndex: 0, mrLeePose: null };
+  const family = {
+    active: false,
+    pending: false,
+    phase: 'inactive',
+    dialogueIndex: 0,
+    auditionResultTold: false,
+    responseChoice: null,
+    pendingChoiceResponse: null,
+    pauseRemaining: 0,
+    entry: null,
+    mrsApproach: null,
+  };
   let familyAssetsPromise = null;
   let mrLeeHomeRoot = null;
   let mrLeeHomeMixer = null;
   let mrLeeHomeTalkClip = null;
   let mrLeeHomeAction = null;
-  let mrLeeHomeRightArm = null;
-  let mrLeeHomeRightForeArm = null;
-  const mrLeeGestureAxis = new T.Vector3(0, 1, 0);
-  const mrLeeGestureRotation = new T.Quaternion();
-  const mrLeeForearmAxis = new T.Vector3(0, 0, 1);
-  const mrLeeForearmRotation = new T.Quaternion();
   let mrsLeeRoot = null;
   let mrsLeeMixer = null;
   let mrsLeeGestureAction = null;
@@ -1472,15 +1523,40 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     ],
   };
   const familyDialogue = [
-    'Soo-ah: Mum, Dad… I passed the NOVA audition. They chose me.',
-    'Mr. Lee: (shouting) No! You cannot go there, Soo-ah!',
-    'Mr. Lee: That industry sexualizes young girls and spits them out when they’re no longer useful. I don’t want that to happen to you.',
-    'Mrs. Lee: I understand you’re scared for her, but I’m on Soo-ah’s side. She deserves to be heard.',
-    'Ted: She won’t be like that. Soo-ah is wonderful, her voice is amazing, and she’ll be a good trainee.',
-    'Ted: I’ll look after her and make sure she keeps up with her homework and schoolwork.',
-    'Soo-ah: I want to sing and dance, and keep studying too. I’ll work hard to balance both.',
-    'Mrs. Lee: We’ll help her make a safe plan and stay on top of school.',
-    'Mr. Lee: I still worry, but I’ll listen to the plan before I decide.',
+    'Soo-ah: Appa, Eomma, there’s something I need to tell you.',
+    'Mr. Lee: What is it, Soo-ah? Is something wrong?',
+    'Soo-ah: No. Well… not exactly.',
+    'Ted: Soo-ah has something important to tell you.',
+    'Soo-ah: I went to the NOVA audition.',
+    'Mr. Lee: You did what?',
+    'Soo-ah: I auditioned for NOVA. And… I passed.',
+    'Mrs. Lee: You passed? Soo-ah! That’s wonderful!',
+    'Soo-ah: Thank you, Eomma. I was afraid you might say no.',
+    'Mr. Lee: You went to an audition without telling us?',
+    'Soo-ah: I was afraid you would say no.',
+    'Soo-ah: Singing and dancing mean so much to me. I worked hard to prepare for the audition.',
+    'Soo-ah: I practiced after my homework. I still intend to take my studies seriously.',
+    'Mrs. Lee: We want to understand what the training involves and how you’ll balance school.',
+    'Ted: I’m proud of Soo-ah for telling you. I’ll support her, but I want her to explain what she wants.',
+    'Soo-ah: I really want to try. I promise I’ll keep working hard at school too.',
+    'Mrs. Lee: I’m proud of you for telling us, Soo-ah. We’ll work through this together.',
+    'Mr. Lee: I need some time to think about this, Soo-ah. But I can see how much it means to you.',
+    'Soo-ah: Thank you. I feel relieved that I finally told you.',
+    'Ted: Whatever happens next, you did something brave today.',
+  ];
+  const familyChoices = [
+    {
+      text: 'I know you want me to do well at school, Appa. But I want to try this too.',
+      reply: 'Mr. Lee: I do want you to do well. We’ll need to understand how this fits with school.',
+    },
+    {
+      text: 'I didn’t tell you because I was scared you wouldn’t understand.',
+      reply: 'Mrs. Lee: I’m sorry you felt too scared to tell us. I want you to be able to talk to us.',
+    },
+    {
+      text: 'I passed the audition. I just wanted you to be proud of me.',
+      reply: 'Mr. Lee: I am proud of how hard you worked. I still need time to think about what comes next.',
+    },
   ];
   const auditionRoots = { SooAh: null, Ted: null };
   const auditionJudges = [];
@@ -2915,10 +2991,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         fbxLoader.loadAsync('./assets/characters/mrs-lee-happy-gesture.fbx'),
         fbxLoader.loadAsync('./assets/characters/mr-lee-talking-home.fbx'),
         ensureClip('MrsLeeTalking'),
-        ensureClip('MrLeeAngryGesture'),
-        ensureClip('MrLeeAngryPoint'),
         textureLoader.loadAsync('./assets/textures/family/mrs-lee.png'),
-      ]).then(([mrsAsset, mrAsset, talkingClip, , , texture]) => {
+      ]).then(([mrsAsset, mrAsset, talkingClip, texture]) => {
         const mrsGestureClip = mrsAsset.animations?.[0];
         mrLeeHomeTalkClip = mrAsset.animations?.[0];
         if (!mrsGestureClip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
@@ -2936,12 +3010,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         fitToHeight(mrLeeHomeRoot, 1.6);
         mrLeeHomeRoot.name = 'MrLeeHome';
         mrLeeHomeRoot.visible = false;
-        mrLeeHomeRoot.traverse((node) => {
-          if (!node.isBone) return;
-          const name = node.name.toLowerCase().replace(/[^a-z]/g, '');
-          if (name.endsWith('mixamorigrigharm')) mrLeeHomeRightArm = node;
-          if (name.endsWith('mixamorigrighforearm')) mrLeeHomeRightForeArm = node;
-        });
         setShadows(mrLeeHomeRoot);
         familyScene.add(mrLeeHomeRoot);
         mrLeeHomeMixer = new T.AnimationMixer(mrLeeHomeRoot);
@@ -2973,17 +3041,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     return true;
   }
 
-  function applyFamilyMrLeeGesture() {
-    if (!family.active || !mrLeeHomeRightArm || !family.mrLeePose || family.mrLeePose === 'talking') return;
-    const shoulderAngle = family.mrLeePose === 'shout' ? -0.85 : -0.55;
-    mrLeeGestureRotation.setFromAxisAngle(mrLeeGestureAxis, shoulderAngle);
-    mrLeeHomeRightArm.quaternion.multiply(mrLeeGestureRotation);
-    if (mrLeeHomeRightForeArm) {
-      mrLeeForearmRotation.setFromAxisAngle(mrLeeForearmAxis, family.mrLeePose === 'shout' ? 0.2 : 0.12);
-      mrLeeHomeRightForeArm.quaternion.multiply(mrLeeForearmRotation);
-    }
-  }
-
   function playMrsLeeMode(mode) {
     if (!mrsLeeMixer) return false;
     if (mode === 'talking' && mrsLeeTalkingClip) {
@@ -3006,17 +3063,101 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     return true;
   }
 
+  function faceFamilyActor(actor, target) {
+    actor.rotation.y = Math.atan2(target.position.x - actor.position.x, target.position.z - actor.position.z);
+  }
+
+  function setCafeFamilySpeaker(line) {
+    faceFamilyActor(mrLeeHomeRoot, characterRoots.SooAh);
+    faceFamilyActor(mrsLeeRoot, characterRoots.SooAh);
+    if (line.startsWith('Mr. Lee:')) {
+      setMrLeeHomeMode('talking');
+      playMrsLeeMode('supportive');
+    } else if (line.startsWith('Mrs. Lee:')) {
+      setMrLeeHomeMode('idle');
+      playMrsLeeMode('talking');
+    } else if (line.startsWith('Soo-ah:')) {
+      setMrLeeHomeMode('idle');
+      playMrsLeeMode('supportive');
+      faceFamilyActor(characterRoots.SooAh, mrLeeHomeRoot);
+      if (line.includes('Appa, Eomma') || line.includes('afraid')) triggerNervous('SooAh');
+    } else {
+      setMrLeeHomeMode('idle');
+      playMrsLeeMode('supportive');
+      faceFamilyActor(characterRoots.Ted, characterRoots.SooAh);
+    }
+  }
+
+  function updateCafeFamilyScene(dt) {
+    if (!family.active) return;
+    if (family.phase === 'entering' && family.entry) {
+      const entry = family.entry;
+      entry.elapsed = Math.min(entry.duration, entry.elapsed + dt);
+      const t = entry.elapsed / entry.duration;
+      const eased = t * t * (3 - 2 * t);
+      for (const name of ['Ted', 'SooAh']) {
+        const root = characterRoots[name];
+        const from = entry.starts[name];
+        const to = entry.ends[name];
+        root.position.set(from.x + (to.x - from.x) * eased, 0, from.z + (to.z - from.z) * eased);
+        root.rotation.y = 0;
+      }
+      if (t >= 1) {
+        family.entry = null;
+        for (const name of ['Ted', 'SooAh']) {
+          characterActions[name]?.fadeOut(0.16);
+          walkingCharacters.delete(name);
+          delete movementModes[name];
+          fadingMovement[name] = 0.16;
+          characterMode[name] = 'standingIdle';
+        }
+        family.phase = 'conversation';
+        family.dialogueIndex = 0;
+        message = 'Mr. Lee: Ted and Soo-ah? Why have you come together? Is something wrong?';
+        setCafeFamilySpeaker(message);
+      }
+    }
+    if (family.phase === 'reaction-pause') {
+      family.pauseRemaining = Math.max(0, family.pauseRemaining - dt);
+      if (family.pauseRemaining === 0) {
+        family.phase = 'conversation';
+        message = 'Mr. Lee is quiet for a moment.';
+      }
+    }
+    if (family.mrsApproach) {
+      const move = family.mrsApproach;
+      move.elapsed = Math.min(move.duration, move.elapsed + dt);
+      const scaled = (move.elapsed / move.duration) * (move.points.length - 1);
+      const segment = Math.min(move.points.length - 2, Math.floor(scaled));
+      const local = scaled - segment;
+      const a = move.points[segment];
+      const b = move.points[segment + 1];
+      const eased = local * local * (3 - 2 * local);
+      mrsLeeRoot.position.set(a.x + (b.x - a.x) * eased, 0, a.z + (b.z - a.z) * eased);
+      faceFamilyActor(mrsLeeRoot, characterRoots.SooAh);
+      if (move.elapsed >= move.duration) {
+        mrsLeeRoot.position.set(b.x, 0, b.z);
+        family.mrsApproach = null;
+        playMrsLeeMode('supportive');
+      }
+    }
+  }
+
   function startFamilyVisit() {
-    if (!school.auditionPassed || family.active) return family.active;
+    if (!school.auditionPassed || family.active || family.auditionResultTold) return family.active;
     if (family.pending) return true;
     family.pending = true;
     family.phase = 'loading';
-    message = 'After school, Ted and Soo-ah go to the Lee family home.';
+    message = 'Soo-ah and Ted step inside Lee’s Cafe.';
     loadFamilyAssets().then(() => {
       family.pending = false;
       family.active = true;
-      family.phase = 'conversation';
+      family.phase = 'entering';
       family.dialogueIndex = 0;
+      family.responseChoice = null;
+      family.pendingChoiceResponse = null;
+      family.auditionResultTold = false;
+      family.mrsApproach = null;
       school.active = false;
       school.phase = 'complete';
       cafeJourney.active = false;
@@ -3024,17 +3165,26 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mrLeePatrolling = false;
       mrLeeAware = false;
 
-      familyScene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeHomeRoot, mrsLeeRoot);
-      const arrivals = {
-        Ted: { x: -0.42, z: 2.6 },
-        SooAh: { x: 0.42, z: 2.6 },
+      familyScene.add(cafeRoot, parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeHomeRoot, mrsLeeRoot);
+      setCafeInterior(true);
+      family.entry = {
+        elapsed: 0,
+        duration: 1.15,
+        starts: {
+          Ted: { x: -0.8, z: -1.9 },
+          SooAh: { x: -0.05, z: -2.05 },
+        },
+        ends: {
+          Ted: { x: -0.65, z: -0.68 },
+          SooAh: { x: 0.4, z: -0.78 },
+        },
       };
       for (const name of ['Ted', 'SooAh']) {
         const root = parkCharacterRoots[name];
         characterRoots[name] = root;
         root.visible = true;
-        root.position.set(arrivals[name].x, 0, arrivals[name].z);
-        root.rotation.y = Math.PI;
+        root.position.set(family.entry.starts[name].x, 0, family.entry.starts[name].z);
+        root.rotation.y = 0;
         sittingCharacters.delete(name);
         sittingDown.delete(name);
         walkingCharacters.delete(name);
@@ -3047,6 +3197,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         characterMixers[name].stopAllAction();
         characterMixers[name].update(0);
         restoreStandingPose(name);
+        const walkClip = walkClipFor(name);
+        if (walkClip) {
+          playClip(name, walkClip, { loop: true, fade: 0.15 });
+          walkingCharacters.add(name);
+          movementModes[name] = 'walking';
+          characterMode[name] = 'walking';
+        }
       }
 
       const tedHomeRoot = parkCharacterRoots.Ted;
@@ -3055,11 +3212,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
       mrLeeRoot.visible = false;
       mrLeeHomeRoot.visible = true;
-      mrLeeHomeRoot.position.set(-1.05, 0, 0.55);
-      mrLeeHomeRoot.rotation.y = 0;
+      mrLeeHomeRoot.position.set(0.55, 0, 0.92);
+      mrLeeHomeRoot.rotation.y = Math.PI;
       mrsLeeRoot.visible = true;
-      mrsLeeRoot.position.set(1.05, 0, 0.55);
-      mrsLeeRoot.rotation.y = 0;
+      mrsLeeRoot.position.set(-0.8, 0, 0.92);
+      mrsLeeRoot.rotation.y = Math.PI;
       mrLeeHomeMixer.stopAllAction();
       mrLeeHomeMixer.update(0);
       mrLeeHomeAction = null;
@@ -3072,17 +3229,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       groundTedDuringStand();
       groundSooAhDuringStand();
+      familyPath.position.y = 0;
 
       followCamera.mode = 'free';
-      player.x = 0;
-      player.z = 8.5;
-      player.yaw = 0;
-      player.pitch = -0.08;
-      message = 'At Lee’s home. Press F to tell Mr. and Mrs. Lee about NOVA.';
+      player.x = -0.2;
+      player.z = -6.0;
+      player.yaw = Math.PI;
+      player.pitch = 0.02;
+      message = 'Soo-ah and Ted enter Lee’s Cafe. Mr. Lee notices them behind the counter.';
     }).catch((error) => {
       family.pending = false;
       family.phase = 'ready-to-tell';
-      message = 'The Lee family home could not load. Press F to try again.';
+      message = 'Lee’s Cafe conversation could not load. Press F to try again.';
       console.error(error);
     });
     return true;
@@ -3090,30 +3248,79 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function advanceFamilyDialogue() {
     if (!family.active) return false;
-    if (family.phase === 'complete') {
-      message = 'Soo-ah has shared her NOVA news with Mr. and Mrs. Lee.';
+    if (family.phase === 'complete') return leaveCafeStory();
+    if (['entering', 'reaction-pause', 'choice'].includes(family.phase)) return true;
+    if (family.pendingChoiceResponse) {
+      message = family.pendingChoiceResponse;
+      family.pendingChoiceResponse = null;
+      setCafeFamilySpeaker(message);
       return true;
     }
     message = familyDialogue[family.dialogueIndex++];
-    if (message.startsWith('Mr. Lee:')) {
-      mrLeeHomeRoot.position.z = message.includes('No!') || message.includes('sexualizes') ? 0.78 : 0.55;
-      family.mrLeePose = message.includes('No!') ? 'shout' : message.includes('sexualizes') ? 'angry' : 'talking';
-      playMrsLeeMode('supportive');
-      if (message.includes('No! You cannot go there')) playMrLeeStoryGesture('angryPoint');
-      else if (message.includes('sexualizes')) playMrLeeStoryGesture('angryGesture');
-      else setMrLeeHomeMode('talking');
-    } else if (message.startsWith('Mrs. Lee:')) {
-      mrLeeHomeRoot.position.z = 0.55;
-      family.mrLeePose = null;
+    setCafeFamilySpeaker(message);
+    if (message.includes('I auditioned for NOVA. And… I passed.')) {
+      family.auditionResultTold = true;
+      family.phase = 'reaction-pause';
+      family.pauseRemaining = 1.25;
       setMrLeeHomeMode('idle');
-      playMrsLeeMode('talking');
-    } else {
-      mrLeeHomeRoot.position.z = 0.55;
-      family.mrLeePose = null;
-      setMrLeeHomeMode('idle');
-      playMrsLeeMode('supportive');
+    } else if (message.includes('I was afraid you would say no.')) {
+      family.phase = 'choice';
+    } else if (message.startsWith('Mrs. Lee: You passed?')) {
+      family.mrsApproach = {
+        elapsed: 0,
+        duration: 1.8,
+        points: [
+          { x: -0.8, z: 0.92 },
+          { x: -1.35, z: 0.92 },
+          { x: -1.35, z: -0.25 },
+          { x: 0.9, z: -0.35 },
+        ],
+      };
     }
-    if (family.dialogueIndex >= familyDialogue.length) family.phase = 'complete';
+    if (family.dialogueIndex >= familyDialogue.length) {
+      family.phase = 'complete';
+      family.storyComplete = true;
+    }
+    return true;
+  }
+
+  function chooseFamilyResponse(index) {
+    if (!family.active || family.phase !== 'choice' || !Number.isInteger(index) || !familyChoices[index]) return false;
+    const choice = familyChoices[index];
+    family.responseChoice = index;
+    family.pendingChoiceResponse = choice.reply;
+    family.phase = 'conversation';
+    message = `Soo-ah: “${choice.text}”`;
+    setCafeFamilySpeaker(`Soo-ah: ${choice.text}`);
+    return true;
+  }
+
+  function leaveCafeStory() {
+    if (!family.active || family.phase !== 'complete') return false;
+    family.active = false;
+    family.phase = 'complete';
+    familyScene.add(familyHouse, familyGround, familyPath);
+    scene.add(cafeRoot, parkCharacterRoots.Ted, parkCharacterRoots.SooAh);
+    setCafeInterior(false);
+    const outside = {
+      Ted: { x: -5.55, z: 31.5 },
+      SooAh: { x: -4.45, z: 31.5 },
+    };
+    for (const name of ['Ted', 'SooAh']) {
+      const root = characterRoots[name];
+      root.position.set(outside[name].x, parkHeightAt(outside[name].x, outside[name].z), outside[name].z);
+      root.rotation.y = Math.PI;
+      standingCharacters.add(name);
+      standingReady.add(name);
+      characterMode[name] = 'standingIdle';
+    }
+    parkLimit = parkHalf - 0.9;
+    followCamera.mode = 'front';
+    followCamera.angle = Math.PI;
+    followCamera.distance = 5.4;
+    followCamera.pitch = 0.22;
+    setCameraView('front');
+    message = 'Soo-ah has told her parents about NOVA. The family will talk more soon.';
     return true;
   }
 
@@ -3518,18 +3725,30 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function hud() {
     if (family.pending) {
-      return { task: 'After school · Lee family home', prompt: 'Loading the family home…', message, hint: 'Ted and Soo-ah are going to tell Mr. and Mrs. Lee.' };
+      return { task: 'Lee’s Cafe · telling Mr. and Mrs. Lee', prompt: 'Opening the cafe…', message, hint: 'Soo-ah and Ted are going inside together.' };
     }
     if (family.active) {
+      const phasePrompt = family.phase === 'complete' ? 'F · Return to the cafe entrance'
+        : family.phase === 'conversation' ? 'F · Continue conversation'
+          : family.phase === 'choice' ? 'Choose Soo-ah’s response'
+            : family.phase === 'reaction-pause' ? 'Mr. Lee is taking a moment…' : '';
+      const phaseHint = family.phase === 'complete' ? 'The family will talk more about NOVA in the next chapter.'
+        : family.phase === 'choice' ? 'Any response leads to the same conversation.'
+          : family.phase === 'entering' ? 'Mr. Lee is working behind the counter; Mrs. Lee is preparing the cafe.'
+            : 'Soo-ah is telling her parents about the audition.';
       return {
-        task: family.phase === 'complete' ? 'Soo-ah has shared her NOVA news' : 'At Lee family home · tell the parents',
-        prompt: family.phase === 'complete' ? '' : 'F · Continue conversation',
+        task: family.phase === 'complete' ? 'Soo-ah has told her parents about NOVA' : 'Inside Lee’s Cafe · tell the parents',
+        prompt: phasePrompt,
         message,
-        hint: family.phase === 'complete' ? 'Mr. and Mrs. Lee know that Soo-ah passed the audition.' : 'Mr. Lee is cautious; Mrs. Lee is supporting Soo-ah.',
+        hint: phaseHint,
         selectedCharacter,
         standing: true,
-        walkingReady: false,
+        walkingReady: family.phase === 'complete',
+        choices: family.phase === 'choice' ? familyChoices.map((choice) => choice.text) : null,
       };
+    }
+    if (family.phase === 'complete') {
+      return { task: 'Soo-ah has told her parents about NOVA', prompt: '', message, hint: 'Ted and Soo-ah are outside Lee’s Cafe.', selectedCharacter, standing: true, walkingReady: true };
     }
     if (school.active) {
       const task = school.phase === 'arrival' ? 'Next school day · Seoul school entrance'
@@ -3663,7 +3882,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     movingKia.quaternion.copy(trafficQuat);
     updateMrLeePatrol(dt);
     for (const mixer of mixers) mixer.update(dt);
-    applyFamilyMrLeeGesture();
+    updateCafeFamilyScene(dt);
     updateAudition(dt);
     updateHomeJourney();
     if (walkingCharacters.has('Ted')) groundTedDuringStand();
@@ -3902,6 +4121,43 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const debug = {
     startAudition: () => { auditionAccepted = true; return startAudition(); },
     startHomeJourney: () => { auditionAccepted = true; mochiShared = true; mochiConsumed = true; return startHomeJourney(); },
+    startCafeStory: () => {
+      school.auditionPassed = true;
+      auditionAccepted = true;
+      mochiShared = true;
+      mochiConsumed = true;
+      routeStarted = true;
+      cafeJourney.active = true;
+      cafeJourney.phase = 'at-cafe';
+      cafeJourney.talks = [true, true];
+      for (const [name, offset] of [['Ted', -0.55], ['SooAh', 0.55]]) {
+        const root = characterRoots[name];
+        const mixer = characterMixers[name];
+        const standClip = sitToStandClips[name];
+        if (mixer && standClip) {
+          mixer.stopAllAction();
+          const action = mixer.clipAction(standClip);
+          action.reset();
+          action.setLoop(T.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          action.play();
+          action.time = standClip.duration;
+          mixer.update(0);
+          saveStandingPose(name);
+          mixer.stopAllAction();
+          mixer.update(0);
+          restoreStandingPose(name);
+        }
+        sittingCharacters.delete(name);
+        sittingDown.delete(name);
+        root.visible = true;
+        root.position.set(cafeJourney.destination.x + offset, parkHeightAt(cafeJourney.destination.x + offset, cafeJourney.destination.z), cafeJourney.destination.z);
+        root.rotation.y = Math.PI;
+        standingCharacters.add(name);
+        standingReady.add(name);
+      }
+      return interact();
+    },
     getHomeState: () => ({ phase: journey.phase, selectedCharacter, position: characterRoots[selectedCharacter].position.toArray(), target: journey.destination, parkLimit, standing: standingCharacters.has(selectedCharacter), standingReady: standingReady.has(selectedCharacter), walking: walkingCharacters.has(selectedCharacter) }),
     getAuditionState: () => ({
       phase: audition.phase,
@@ -4261,5 +4517,5 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     },
   };
 
-  return { get scene() { return family.active ? familyScene : school.active ? schoolScene : audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
+  return { get scene() { return family.active ? familyScene : school.active ? schoolScene : audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, chooseFamilyResponse, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
 }
