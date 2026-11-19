@@ -1679,7 +1679,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       const friend = targets[0];
       if (dist(self.x, self.z, friend.point) < friend.radius) return friend.id;
     }
-    if (routeStarted && !mochiHolder && !mochiShared) targets.push({ id: 'mochi', point: mochiStool.position, radius: 1.35 });
+    if (routeStarted && !mochiHolder && !mochiShared) targets.push({ id: 'mochi', point: mochiStool.position, radius: 3.2 });
     return targets
       .map((target) => ({ ...target, distance: dist(self.x, self.z, target.point) }))
       .filter((target) => target.distance < target.radius)
@@ -2226,7 +2226,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function startHomeJourney() {
-    if (!auditionAccepted || audition.active || audition.pending || journey.active) return journey.active;
+    if (!auditionAccepted || !mochiShared || !mochiConsumed || audition.active || audition.pending || journey.active) return journey.active;
     const name = selectedCharacter;
     const destination = homeDestinations[name];
     journey.active = true;
@@ -2298,9 +2298,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       return true;
     }
-    if (auditionAccepted) return startHomeJourney();
+    if (auditionAccepted && mochiShared && mochiConsumed) return startHomeJourney();
     if (mochiEating) {
-      message = 'Soo-ah is taking a bite…';
+      message = mochiEating.recipient === 'SooAh' ? 'Soo-ah is taking a bite…' : 'Ted is taking a bite…';
       return true;
     }
     const target = nearest();
@@ -2308,7 +2308,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (target === 'mochi') return pickUpMochi();
     const isBenchFriend = selectedCharacter === 'Ted' ? target === 'sooAh' : target === 'ted';
     if (routeStarted && isBenchFriend) {
+      if (mrLeeAware) {
+        message = 'Mr. Lee is watching. Move out of sight before you share the mochi or talk.';
+        return true;
+      }
       if (mochiHolder === selectedCharacter && !mochiShared) return shareMochi();
+      if (!mochiShared || !mochiConsumed) {
+        message = 'Pick up the mochi at the stool and share it before talking about NOVA.';
+        return true;
+      }
       return talkAtBench();
     }
     if (target === 'lee') {
@@ -2325,8 +2333,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function talkAtBench() {
-    if (mrLeeAware && !mochiConsumed) {
+    if (mrLeeAware) {
       message = 'Mr. Lee is watching. Move out of sight and wait before you talk.';
+      return true;
+    }
+    if (!mochiShared || !mochiConsumed) {
+      message = 'Share the mochi and let them finish eating before the audition conversation.';
       return true;
     }
     mrLeePatrolling = false;
@@ -2337,7 +2349,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         'Ted: You helped me with Korean when school felt lonely. Let me support something you want.',
         'Soo-ah: All right. I will go to the audition.',
       ];
-    if (mochiShared && mochiHolder === 'SooAh' && !mochiConsumed) tedLines.splice(1, 0, 'Soo-ah: Thank you for bringing the mochi.');
+    if (mochiShared && mochiHolder === 'SooAh') tedLines.splice(1, 0, 'Soo-ah: That was yummy. Thank you, Ted.');
     const sooAhLines = [
         'Soo-ah: I said I would always help you with Korean.',
         mochiShared ? 'They share mochi and renew their promise.' : 'They renew their promise.',
@@ -2658,10 +2670,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       : standingCharacters.has(selectedCharacter)
         ? standingReady.has(selectedCharacter) ? `${label} standing · arrows turn + walk · Q sit at bench` : `${label} is standing up…`
         : `${label} selected · E stand at bench`;
+    const friendPrompt = target === 'sooAh' || target === 'ted'
+      ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi'
+        : !mochiShared ? 'Pick up the mochi first'
+          : !mochiConsumed ? `${mochiEating?.recipient === 'SooAh' ? 'Soo-ah' : 'Ted'} is eating the mochi…`
+            : `F · Talk to ${target === 'sooAh' ? 'Soo-ah' : 'Ted'}`
+      : '';
     const prompt = target === 'mochi' ? 'F · Pick up the mochi'
-      : target === 'sooAh' ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi' : 'F · Talk to Soo-ah'
-        : target === 'ted' ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi' : 'F · Talk to Ted'
-        : target === 'lee' ? 'F · Talk to Mr. Lee' : '';
+      : friendPrompt || (target === 'lee' ? 'F · Talk to Mr. Lee' : '');
     return { task, prompt, message, selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
   }
 
@@ -2921,7 +2937,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   const debug = {
     startAudition: () => { auditionAccepted = true; return startAudition(); },
-    startHomeJourney: () => { auditionAccepted = true; return startHomeJourney(); },
+    startHomeJourney: () => { auditionAccepted = true; mochiShared = true; mochiConsumed = true; return startHomeJourney(); },
     getHomeState: () => ({ phase: journey.phase, selectedCharacter, position: characterRoots[selectedCharacter].position.toArray(), target: journey.destination, parkLimit, standing: standingCharacters.has(selectedCharacter), standingReady: standingReady.has(selectedCharacter), walking: walkingCharacters.has(selectedCharacter) }),
     getAuditionState: () => ({
       phase: audition.phase,

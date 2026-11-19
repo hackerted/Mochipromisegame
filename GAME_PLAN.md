@@ -85,9 +85,9 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 ### Story sequence
 
-1. **Leave the park:** After Soo-ah agrees to audition, the next F starts a map-guided walk home for the selected character. A top-left minimap marks the player, park roads/crossings, both homes, and the active home destination.
-2. **Go home that evening:** Ted’s route leads to the northwest Korean house; Soo-ah’s route leads to the northeast apartment. The current slice ends at the home exterior with an F prompt; interior home scenes and bedtime beats remain planned work.
-3. **Meet the next morning:** At home, F advances to the following morning and transitions to the NOVA stage. A playable street trip to NOVA can be added after a venue exterior and transit assets are chosen.
+1. **Finish the mochi promise:** The player must collect mochi from the stool, avoid Mr. Lee while he is watching, give it to the other character, wait for the bite, then finish the bench conversation. Playing Ted means he gives the mochi to Soo-ah; playing Soo-ah means she gives it to Ted.
+2. **Walk home:** After the audition invitation is accepted, the next F begins a map-guided walk for the selected character. A top-left minimap marks the player's position, park roads/crossings, both homes, and the active home destination. Ted's route leads to the northwest Korean house; Soo-ah's route leads to the northeast apartment.
+3. **Meet the next morning:** At the home exterior, F advances to the following morning and transitions to the NOVA stage. Home interiors and a playable street trip to NOVA remain future work.
 4. **Soo-ah freezes:** At the audition, Soo-ah steps onto the stage, sees the judges and audience, and freezes. Give the player a brief moment to notice her fear before Ted helps.
 5. **Ted encourages her:** If Ted is selected, the player walks him onto the stage. If Soo-ah is selected, Ted enters as an NPC. Ted sings, performs the supplied Gangnam Style dance with his hands free, sets his figure on the stage edge, gives a thumbs-up, and says, “Over to you, chipmunk.” Soo-ah changes from terrified to happy, then walks from the stage wing to her mark.
 6. **Soo-ah performs:** If Soo-ah is selected, the player follows arrow cues through her singing, Hip Hop, Jazz, and Step Hip Hop clips. Each pressed arrow triggers a visible move. If Ted is selected, the same performance runs for Soo-ah as an NPC. Missed cues never block the ending.
