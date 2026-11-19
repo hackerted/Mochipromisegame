@@ -50,3 +50,10 @@
 - Browser verified the Ted route reaches NOVA, shows three live judge scores, preserves the school conversation, and opens the family home. The family screenshot shows both parents and children at the house; the full dialogue reaches its completion state.
 - Browser testing also confirmed that a low cue score stays on the audition retry path. The final portrait viewport shows the live scores and the home family clearly; the judge actors remain off-camera during the close performance shot and are staged for the separate score reveal.
 - Follow-up texture check corrected the FBX/glTF V flip; Mrs Lee now renders with the expected cardigan, blouse and pink skirt. The family transition aligns all actor feet to the porch path from their world bounds, and a closer screenshot shows Ted standing on the surface.
+- User reports Ted still appears sunk and requests a stronger parent confrontation. The Downloads MrsLee folder contains `Talking.fbx`; the game already has Mr Lee talking, angry gesture and angry point clips.
+- **Next step:** commit and push the verified floor/dialogue fix on this feature branch; leave `main` untouched.
+- Replaced the home actor’s stale static bounds with the skeleton-aware floor placement used for standing transitions, and set Ted’s home-only visual scale so he stands at Soo-ah’s height while remaining grounded.
+- The home Mr Lee now uses the user’s `Talking.fbx` rig; his angry-point/gesture clips run for his refusal and industry concern. Mrs Lee’s `Talking.fbx` clip plays for her support, and Ted’s replies cover her voice and homework.
+- Browser verified Ted’s feet at ground level and the complete parent dialogue. No JavaScript errors occurred.
+- Switched the home Mr Lee actor to the user’s `mr lee/Talking.fbx` rig so its embedded talking clip drives the actor; Mrs Lee uses her separate `Talking.fbx` clip while retaining the textured gesture model.
+- Browser v329 verified Ted’s feet at the path and his home scale beside Soo-ah. Browser v330 verified the full confrontation dialogue and both parents’ talking animation clips.

@@ -4,10 +4,10 @@
 After a successful NOVA audition, show the judges accepting Soo-ah, let Ted and Soo-ah celebrate, then transition both playable routes into the existing school setting for a shared conversation about telling Mr. and Mrs. Lee.
 
 ## Next Step
-Commit the verified feature branch for review; leave `main` untouched.
+Commit and push the verified floor/dialogue fix on this feature branch; leave `main` unchanged.
 
 ## Current Phase
-Phase 6: Judge and family-home integration — complete
+Phase 7: Ted grounding and family confrontation — complete
 
 ## Phases
 
@@ -47,6 +47,14 @@ Phase 6: Judge and family-home integration — complete
 - [x] Keep the existing retry path and selected playable character intact
 - [x] Apply source 4K texture atlases to the FBX actors and correct the home framing/poses
 - [x] Review the browser flow before considering the branch ready
+- **Status:** complete
+
+### Phase 7: Ted grounding and family confrontation
+- [x] Inspect the current home screenshot and locate Mr/Mrs Lee speech clips
+- [x] Keep Ted’s feet on the path and correct his apparent floor penetration
+- [x] Use Mr Lee’s angry/talking gestures and Mrs Lee’s talking animation in the parent discussion
+- [x] Add Mr Lee’s refusal and concern about industry sexualization, Ted’s reassurance, and Mrs Lee’s support
+- [x] Verify the updated home scene and dialogue in the browser
 - **Status:** complete
 
 ## Decisions Made (continued)

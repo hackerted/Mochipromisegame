@@ -32,6 +32,12 @@
 - Mr Lee carried a patrol stride into the home shot. Reset his family pose to a neutral stance before the conversation.
 - Applying the GLB atlas with FBX’s V orientation (`flipY=true`) restores Mrs Lee’s green cardigan, cream blouse and pink skirt. The final browser screenshot confirms her colors are correct.
 - The family transition now measures each actor’s world-space feet and offsets the root to the porch-path surface; the closer screenshot shows Ted’s shoes on the path instead of below it.
+- The user still sees Ted as sunk/too low in the home scene. The park model is only fit to 1 m and reads visibly shorter than Soo-ah; a family-only visual scale correction must preserve ground contact.
+- Mr Lee talking and angry gesture/point animation JSON clips already exist in the game. Mrs Lee has both `Talking.fbx` and `Happy Hand Gesture.fbx`; the happy gesture is currently the home actor, so load her talking FBX clip onto that same rig.
+- Requested dialogue: Mr Lee refuses and worries about the K-pop industry's sexualization/discarding of young trainees; Ted defends Soo-ah's voice and promises to support homework; Mrs Lee sides with Soo-ah.
+- The static family bounds did not follow Ted’s animated skeleton. The standing helper updates his skin and computes the feet after the pose is applied; that is the correct home ground alignment.
+- The home Mr Lee FBX and its embedded talking clip use the same rig; the already-extracted angry-point/gesture clips bind to that rig. Mrs Lee’s separate Talking FBX clip also loads on her textured Happy Gesture actor.
+- The last family browser pass confirmed Ted’s home scale is close to Soo-ah’s and his feet meet the path, while Mr Lee’s Talking FBX and Mrs Lee’s Talking FBX both load on the home actors. The dialogue displays the refusal, safety concern, Ted’s promise about homework, and Mrs Lee’s support.
 - The Ted-controlled route was verified end-to-end through the live score panel, NOVA acceptance, school dialogue, Lee home, and the complete family conversation. The earlier low-score Soo-ah attempt still entered the retry state.
 - The home camera and material fix were visually checked; the narrow portrait viewport does not show the full-width judge panel in the dance shot, so the score HUD remains the clear live scoring cue. The seated judge actors are positioned for the final score reveal.
 

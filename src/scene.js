@@ -429,6 +429,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     MrLeeAngryGesture: { url: './assets/clips/MrLeeAngryGesture.json', type: 'json' },
     MrLeePointing: { url: './assets/clips/MrLeePointing.json', type: 'json' },
     MrLeeTalking: { url: './assets/clips/MrLeeTalking.json', type: 'json' },
+    MrsLeeTalking: { url: './assets/characters/mrs-lee-talking.fbx', type: 'fbx' },
   };
   const ted = tedAsset.scene;
   ted.traverse((node) => {
@@ -1126,7 +1127,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const terrifiedClips = { SooAh: null, Ted: null };
   const sitToStandClips = { SooAh: null, Ted: null };
   const standToSitClips = { SooAh: null, Ted: null };
-  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null, talking: null };
+  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null, talking: null, angryPoint: null, angryGesture: null };
   const setLoadedClip = (name, clip) => {
     clips[name] = clip;
     if (name === 'SooAhWalk') walkingClips.SooAh = inPlaceFbxWalk(clip);
@@ -1161,6 +1162,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mrLeeClips.walk = inPlaceStandTransition(clip);
     }
     if (name === 'MrLeeTalking') mrLeeClips.talking = inPlaceStandTransition(clip);
+    if (name === 'MrLeeAngryPoint') mrLeeClips.angryPoint = inPlaceStandTransition(clip);
+    if (name === 'MrLeeAngryGesture') mrLeeClips.angryGesture = inPlaceStandTransition(clip);
     return clip;
   };
   const ensureClip = (name) => {
@@ -1348,6 +1351,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mrLeeAction = action;
     return true;
   }
+  function playMrLeeStoryGesture(mode) {
+    const clip = mrLeeClips[mode];
+    if (!clip) return family.active && mrLeeHomeMixer ? setMrLeeHomeMode('talking') : setMrLeeMode('talking');
+    const familySpeaker = family.active && mrLeeHomeMixer;
+    const mixer = familySpeaker ? mrLeeHomeMixer : mrLeeMixer;
+    const previous = familySpeaker ? mrLeeHomeAction : mrLeeAction;
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(T.LoopRepeat, Infinity);
+    action.clampWhenFinished = false;
+    action.timeScale = 0.75;
+    if (previous) previous.fadeOut(0.14);
+    action.fadeIn(0.14).play();
+    if (familySpeaker) mrLeeHomeAction = action;
+    else mrLeeAction = action;
+    return true;
+  }
   setMrLeeMode('idle');
 
   const camera = new T.PerspectiveCamera(50, 1, 0.08, 170);
@@ -1385,10 +1405,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   };
   const journey = { active: false, phase: 'none', destination: null };
   const school = { active: false, phase: 'inactive', dialogueIndex: 0, auditionPassed: false, arrived: 0 };
-  const family = { active: false, pending: false, phase: 'inactive', dialogueIndex: 0 };
+  const family = { active: false, pending: false, phase: 'inactive', dialogueIndex: 0, mrLeePose: null };
   let familyAssetsPromise = null;
+  let mrLeeHomeRoot = null;
+  let mrLeeHomeMixer = null;
+  let mrLeeHomeTalkClip = null;
+  let mrLeeHomeAction = null;
+  let mrLeeHomeRightArm = null;
+  let mrLeeHomeRightForeArm = null;
+  const mrLeeGestureAxis = new T.Vector3(0, 1, 0);
+  const mrLeeGestureRotation = new T.Quaternion();
+  const mrLeeForearmAxis = new T.Vector3(0, 0, 1);
+  const mrLeeForearmRotation = new T.Quaternion();
   let mrsLeeRoot = null;
+  let mrsLeeMixer = null;
   let mrsLeeGestureAction = null;
+  let mrsLeeTalkingAction = null;
+  let mrsLeeTalkingClip = null;
   const schoolDialogue = {
     Ted: [
       'The next school day, Ted and Soo-ah meet at the school entrance.',
@@ -1412,12 +1445,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   };
   const familyDialogue = [
     'Soo-ah: Mum, Dad… I passed the NOVA audition. They chose me.',
-    'Mrs. Lee: Oh, sweetheart, I’m so proud of you. You worked hard for this.',
-    'Mr. Lee: I’m proud you did well. But trainee school will take time, and your exams still matter.',
-    'Soo-ah: I want to keep studying. Could we look at the training schedule together?',
-    'Ted: I’ll help her make a plan for practice and homework.',
-    'Mrs. Lee: Let’s hear the plan before we decide anything.',
-    'Mr. Lee: All right. I’m not promising yet, but I’ll listen.',
+    'Mr. Lee: (shouting) No! You cannot go there, Soo-ah!',
+    'Mr. Lee: That industry sexualizes young girls and spits them out when they’re no longer useful. I don’t want that to happen to you.',
+    'Mrs. Lee: I understand you’re scared for her, but I’m on Soo-ah’s side. She deserves to be heard.',
+    'Ted: She won’t be like that. Soo-ah is wonderful, her voice is amazing, and she’ll be a good trainee.',
+    'Ted: I’ll look after her and make sure she keeps up with her homework and schoolwork.',
+    'Soo-ah: I want to sing and dance, and keep studying too. I’ll work hard to balance both.',
+    'Mrs. Lee: We’ll help her make a safe plan and stay on top of school.',
+    'Mr. Lee: I still worry, but I’ll listen to the plan before I decide.',
   ];
   const auditionRoots = { SooAh: null, Ted: null };
   const auditionJudges = [];
@@ -1549,7 +1584,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const groundSooAhDuringStand = () => {
     sooAh.updateMatrixWorld(true);
     for (const mesh of sooAhStandMeshes) mesh.skeleton.update();
-    const groundY = school.active ? 0 : parkHeightAt(sooAh.position.x, sooAh.position.z);
+    const groundY = family.active ? familyPath.position.y : school.active ? 0 : parkHeightAt(sooAh.position.x, sooAh.position.z);
     sooAh.position.y += groundY - sooAhStandBounds.setFromObject(sooAh, true).min.y;
     sooAh.updateMatrixWorld(true);
   };
@@ -1559,7 +1594,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const groundTedDuringStand = () => {
     tedRoot.updateMatrixWorld(true);
     for (const mesh of tedStandMeshes) mesh.skeleton.update();
-    const groundY = school.active ? 0 : parkHeightAt(tedRoot.position.x, tedRoot.position.z);
+    const groundY = family.active ? familyPath.position.y : school.active ? 0 : parkHeightAt(tedRoot.position.x, tedRoot.position.z);
     tedRoot.position.y += groundY - tedStandBounds.setFromObject(tedRoot, true).min.y;
     tedRoot.updateMatrixWorld(true);
   };
@@ -2655,33 +2690,101 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function loadFamilyAssets() {
-    if (mrsLeeRoot) return Promise.resolve();
+    if (mrsLeeRoot && mrLeeHomeRoot) return Promise.resolve();
     if (!familyAssetsPromise) {
       familyAssetsPromise = Promise.all([
         fbxLoader.loadAsync('./assets/characters/mrs-lee-happy-gesture.fbx'),
-        ensureClip('MrLeeTalking'),
+        fbxLoader.loadAsync('./assets/characters/mr-lee-talking-home.fbx'),
+        ensureClip('MrsLeeTalking'),
+        ensureClip('MrLeeAngryGesture'),
+        ensureClip('MrLeeAngryPoint'),
         textureLoader.loadAsync('./assets/textures/family/mrs-lee.png'),
-      ]).then(([asset, , texture]) => {
-        const clip = asset.animations?.[0];
-        if (!clip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
-        mrsLeeRoot = asset;
+      ]).then(([mrsAsset, mrAsset, talkingClip, , , texture]) => {
+        const mrsGestureClip = mrsAsset.animations?.[0];
+        mrLeeHomeTalkClip = mrAsset.animations?.[0];
+        if (!mrsGestureClip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
+        if (!mrLeeHomeTalkClip) throw new Error('Mr Lee home talking FBX has no animation clip.');
+        mrsLeeRoot = mrsAsset;
+        mrsLeeTalkingClip = talkingClip;
         applyCharacterTexture(mrsLeeRoot, texture, maxAnisotropy, true);
         fitToHeight(mrsLeeRoot, 1.48);
         mrsLeeRoot.name = 'MrsLeeHome';
         mrsLeeRoot.visible = false;
         setShadows(mrsLeeRoot);
         familyScene.add(mrsLeeRoot);
-        const mixer = new T.AnimationMixer(mrsLeeRoot);
-        mrsLeeGestureAction = mixer.clipAction(clip);
+        mrLeeHomeRoot = mrAsset;
+        applyCharacterTexture(mrLeeHomeRoot, mrLeeTexture, maxAnisotropy, true);
+        fitToHeight(mrLeeHomeRoot, 1.6);
+        mrLeeHomeRoot.name = 'MrLeeHome';
+        mrLeeHomeRoot.visible = false;
+        mrLeeHomeRoot.traverse((node) => {
+          if (!node.isBone) return;
+          const name = node.name.toLowerCase().replace(/[^a-z]/g, '');
+          if (name.endsWith('mixamorigrigharm')) mrLeeHomeRightArm = node;
+          if (name.endsWith('mixamorigrighforearm')) mrLeeHomeRightForeArm = node;
+        });
+        setShadows(mrLeeHomeRoot);
+        familyScene.add(mrLeeHomeRoot);
+        mrLeeHomeMixer = new T.AnimationMixer(mrLeeHomeRoot);
+        mrsLeeMixer = new T.AnimationMixer(mrsLeeRoot);
+        mrsLeeGestureAction = mrsLeeMixer.clipAction(mrsGestureClip);
         mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
         mrsLeeGestureAction.clampWhenFinished = true;
-        mixers.push(mixer);
+        mixers.push(mrLeeHomeMixer, mrsLeeMixer);
       }).catch((error) => {
         familyAssetsPromise = null;
         throw error;
       });
     }
     return familyAssetsPromise;
+  }
+
+  function setMrLeeHomeMode(mode) {
+    if (!mrLeeHomeMixer) return false;
+    const clip = mode === 'talking' ? mrLeeHomeTalkClip : mrLeeClips.idle;
+    if (!clip) return false;
+    const action = mrLeeHomeMixer.clipAction(clip);
+    if (action === mrLeeHomeAction && action.isRunning()) return true;
+    action.reset();
+    action.setLoop(T.LoopRepeat, Infinity);
+    action.clampWhenFinished = false;
+    if (mrLeeHomeAction) mrLeeHomeAction.fadeOut(0.2);
+    action.fadeIn(0.2).play();
+    mrLeeHomeAction = action;
+    return true;
+  }
+
+  function applyFamilyMrLeeGesture() {
+    if (!family.active || !mrLeeHomeRightArm || !family.mrLeePose || family.mrLeePose === 'talking') return;
+    const shoulderAngle = family.mrLeePose === 'shout' ? -0.85 : -0.55;
+    mrLeeGestureRotation.setFromAxisAngle(mrLeeGestureAxis, shoulderAngle);
+    mrLeeHomeRightArm.quaternion.multiply(mrLeeGestureRotation);
+    if (mrLeeHomeRightForeArm) {
+      mrLeeForearmRotation.setFromAxisAngle(mrLeeForearmAxis, family.mrLeePose === 'shout' ? 0.2 : 0.12);
+      mrLeeHomeRightForeArm.quaternion.multiply(mrLeeForearmRotation);
+    }
+  }
+
+  function playMrsLeeMode(mode) {
+    if (!mrsLeeMixer) return false;
+    if (mode === 'talking' && mrsLeeTalkingClip) {
+      const action = mrsLeeMixer.clipAction(mrsLeeTalkingClip);
+      action.reset();
+      action.setLoop(T.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+      mrsLeeGestureAction?.fadeOut(0.14);
+      mrsLeeTalkingAction?.fadeOut(0.14);
+      action.fadeIn(0.14).play();
+      mrsLeeTalkingAction = action;
+      return true;
+    }
+    mrsLeeTalkingAction?.fadeOut(0.14);
+    if (!mrsLeeGestureAction) return false;
+    mrsLeeGestureAction.reset();
+    mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
+    mrsLeeGestureAction.clampWhenFinished = true;
+    mrsLeeGestureAction.fadeIn(0.14).play();
+    return true;
   }
 
   function startFamilyVisit() {
@@ -2700,7 +2803,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mrLeePatrolling = false;
       mrLeeAware = false;
 
-      familyScene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeRoot, mrsLeeRoot);
+      familyScene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeHomeRoot, mrsLeeRoot);
       const arrivals = {
         Ted: { x: -0.42, z: 2.6 },
         SooAh: { x: 0.42, z: 2.6 },
@@ -2725,28 +2828,29 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         restoreStandingPose(name);
       }
 
-      mrLeeRoot.visible = true;
-      mrLeeRoot.position.set(-1.05, 0, 0.55);
-      mrLeeRoot.rotation.y = 0;
+      const tedHomeRoot = parkCharacterRoots.Ted;
+      // The park-scale Ted mesh reads short beside Soo-ah at home; keep his feet grounded while scaling the visual up slightly.
+      tedHomeRoot.scale.setScalar(1.18);
+
+      mrLeeRoot.visible = false;
+      mrLeeHomeRoot.visible = true;
+      mrLeeHomeRoot.position.set(-1.05, 0, 0.55);
+      mrLeeHomeRoot.rotation.y = 0;
       mrsLeeRoot.visible = true;
       mrsLeeRoot.position.set(1.05, 0, 0.55);
       mrsLeeRoot.rotation.y = 0;
-      mrLeeMixer.stopAllAction();
-      mrLeeMixer.update(0);
-      mrLeeAction = null;
-      setMrLeeMode('idle');
+      mrLeeHomeMixer.stopAllAction();
+      mrLeeHomeMixer.update(0);
+      mrLeeHomeAction = null;
+      setMrLeeHomeMode('idle');
       if (mrsLeeGestureAction) {
         mrsLeeGestureAction.reset();
         mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
         mrsLeeGestureAction.clampWhenFinished = true;
         mrsLeeGestureAction.play();
       }
-      for (const root of [parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeRoot, mrsLeeRoot]) {
-        root.updateMatrixWorld(true);
-        const bounds = new T.Box3().setFromObject(root);
-        root.position.y += familyPath.position.y - bounds.min.y;
-        root.updateMatrixWorld(true);
-      }
+      groundTedDuringStand();
+      groundSooAhDuringStand();
 
       followCamera.mode = 'free';
       player.x = 0;
@@ -2770,8 +2874,24 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       return true;
     }
     message = familyDialogue[family.dialogueIndex++];
-    if (message.startsWith('Mr. Lee:')) setMrLeeMode('talking');
-    else setMrLeeMode('idle');
+    if (message.startsWith('Mr. Lee:')) {
+      mrLeeHomeRoot.position.z = message.includes('No!') || message.includes('sexualizes') ? 0.78 : 0.55;
+      family.mrLeePose = message.includes('No!') ? 'shout' : message.includes('sexualizes') ? 'angry' : 'talking';
+      playMrsLeeMode('supportive');
+      if (message.includes('No! You cannot go there')) playMrLeeStoryGesture('angryPoint');
+      else if (message.includes('sexualizes')) playMrLeeStoryGesture('angryGesture');
+      else setMrLeeHomeMode('talking');
+    } else if (message.startsWith('Mrs. Lee:')) {
+      mrLeeHomeRoot.position.z = 0.55;
+      family.mrLeePose = null;
+      setMrLeeHomeMode('idle');
+      playMrsLeeMode('talking');
+    } else {
+      mrLeeHomeRoot.position.z = 0.55;
+      family.mrLeePose = null;
+      setMrLeeHomeMode('idle');
+      playMrsLeeMode('supportive');
+    }
     if (family.dialogueIndex >= familyDialogue.length) family.phase = 'complete';
     return true;
   }
@@ -3270,6 +3390,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     movingKia.quaternion.copy(trafficQuat);
     updateMrLeePatrol(dt);
     for (const mixer of mixers) mixer.update(dt);
+    applyFamilyMrLeeGesture();
     updateAudition(dt);
     updateHomeJourney();
     if (walkingCharacters.has('Ted')) groundTedDuringStand();
