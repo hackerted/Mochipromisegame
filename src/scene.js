@@ -359,6 +359,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     SooAhJazz: { url: './assets/animations/audition/soo-ah/sooah-jazz.glb', type: 'gltf' },
     SooAhStepHipHop: { url: './assets/animations/audition/soo-ah/sooah-step-hip-hop.glb', type: 'gltf' },
     SooAhAuditionSinging: { url: './assets/animations/audition/soo-ah/sooah-singing.glb', type: 'gltf' },
+    SooAhAuditionWalk: { url: './assets/animations/audition/soo-ah/sooah-walk.glb', type: 'gltf' },
     SooAhAuditionIdle: { url: './assets/animations/audition/soo-ah/sooah-idle.glb', type: 'gltf' },
     SooAhVictory: { url: './assets/animations/audition/soo-ah/sooah-victory.glb', type: 'gltf' },
     MrLeeWalk: { url: './assets/clips/MrLeeWalk.json', type: 'json' },
@@ -1111,7 +1112,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const auditionClipNames = [
     'TedAuditionWalk', 'TedAuditionSinging', 'TedGangnamStyle', 'TedThumbsUp', 'TedHappyGesture',
     'SooAhAuditionTerrified', 'SooAhAuditionHappy', 'SooAhHipHop', 'SooAhJazz',
-    'SooAhStepHipHop', 'SooAhAuditionSinging', 'SooAhAuditionIdle', 'SooAhVictory',
+    'SooAhStepHipHop', 'SooAhAuditionSinging', 'SooAhAuditionWalk', 'SooAhAuditionIdle', 'SooAhVictory',
   ];
   async function loadAuditionAssets() {
     if (auditionLoadPromise) return auditionLoadPromise;
@@ -1133,10 +1134,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mixers.push(auditionMixers[name]);
       }
       for (const name of auditionClipNames) auditionClips[name] = inPlaceFbxWalk(clips[name]);
-      const rightHand = 'mixamorigrighthand';
-      auditionRoots.Ted.traverse((node) => {
-        if (node.isBone && node.name.toLowerCase().replace(/[^a-z]/g, '').endsWith(rightHand)) auditionHands.Ted = node;
-      });
       characterRoots.Ted = auditionRoots.Ted;
       characterRoots.SooAh = auditionRoots.SooAh;
       return true;
@@ -1151,7 +1148,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const clip = auditionClips[name];
     if (!mixer || !clip) return null;
     const previous = auditionActions[actor];
-    if (auditionCurrentClip[actor] === name && previous?.isRunning()) {
+    if (auditionCurrentClip[actor] === name && previous?.isRunning() && loop) {
       return { action: previous, duration: Math.max(clip.duration / Math.max(speed, 0.01), 0.25) };
     }
     const action = mixer.clipAction(clip);
@@ -1280,7 +1277,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const auditionMixers = { SooAh: null, Ted: null };
   const auditionActions = { SooAh: null, Ted: null };
   const auditionCurrentClip = { SooAh: null, Ted: null };
-  const auditionHands = { Ted: null };
   const auditionClips = {};
   const audition = {
     active: false,
@@ -1904,24 +1900,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (line) message = line;
   }
 
-  function holdTedFigure() {
-    const hand = auditionHands.Ted;
-    tedAuditionFigure.visible = true;
-    tedAuditionFigure.scale.setScalar(0.5);
-    if (hand) {
-      hand.add(tedAuditionFigure);
-      tedAuditionFigure.position.set(0, -0.025, 0.09);
-      tedAuditionFigure.rotation.set(0, 0, 0);
-    }
-  }
-
   function placeTedFigure() {
     tedAuditionFigure.visible = true;
     if (tedAuditionFigure.parent !== auditionStage) auditionStage.attach(tedAuditionFigure);
     const from = tedAuditionFigure.position.clone();
     audition.figureTransition = {
       from,
-      to: new T.Vector3(3.2, auditionStageTop, 2.3),
+      to: new T.Vector3(-1.6, auditionStageTop, 2.3),
       elapsed: 0,
       duration: 0.8,
     };
@@ -1935,15 +1920,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function beginTedDance() {
-    holdTedFigure();
+    placeTedFigure();
     setAuditionPhase('ted-dance', 'Ted', 'TedGangnamStyle', {
       speed: 2.35,
-      message: 'Ted launches into his Gangnam Style dance.',
+      message: 'Ted sets down his figure and launches into his Gangnam Style dance.',
     });
   }
 
   function beginTedThumbsUp() {
-    placeTedFigure();
     setAuditionPhase('ted-thumbs-up', 'Ted', 'TedThumbsUp', {
       speed: 1.7,
       message: 'Ted gives Soo-ah a thumbs-up.',
@@ -1962,6 +1946,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     setAuditionPhase('sooah-happy', 'SooAh', 'SooAhAuditionHappy', {
       speed: 3.1,
       message: 'Soo-ah smiles and finds her courage.',
+    });
+  }
+
+  function beginSooAhWalkIn() {
+    auditionRoots.SooAh.position.x = 1.7;
+    auditionRoots.SooAh.rotation.y = -Math.PI / 2;
+    setAuditionPhase('sooah-enter', 'SooAh', 'SooAhAuditionWalk', {
+      speed: 1.1,
+      loop: true,
+      duration: 2.2,
+      message: 'Soo-ah walks into the spotlight.',
     });
   }
 
@@ -1992,12 +1987,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     startSooAhAutoSection(0);
   }
 
-  function startSooAhQteSection(section) {
-    const clipsForQte = ['SooAhAuditionSinging', 'SooAhHipHop', 'SooAhJazz', 'SooAhStepHipHop'];
-    if (section >= clipsForQte.length) return;
-    audition.section = section;
-    const speeds = [3.2, 2.35, 1.15, 2.8];
-    playAuditionClip('SooAh', clipsForQte[section], { loop: true, speed: speeds[section] });
+  function playSooAhCueMove(key) {
+    const moves = {
+      arrowup: ['SooAhHipHop', 2.35, false],
+      arrowdown: ['SooAhAuditionSinging', 3.2, true],
+      arrowleft: ['SooAhJazz', 1.15, false],
+      arrowright: ['SooAhStepHipHop', 2.8, false],
+    };
+    const [clip, speed, loop] = moves[key] ?? ['SooAhAuditionIdle', 1, true];
+    playAuditionClip('SooAh', clip, { loop, speed });
   }
 
   function finishSooAhQte() {
@@ -2009,16 +2007,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function advanceSooAhCue(missed = false) {
-    if (missed) message = 'Keep going; the next beat is coming.';
+    if (missed) {
+      message = 'Keep going; the next beat is coming.';
+      playAuditionClip('SooAh', 'SooAhAuditionIdle', { loop: true, speed: 1 });
+    }
     audition.cueIndex++;
     audition.cueTimer = 0;
     audition.cueAnswered = false;
     if (audition.cueIndex >= audition.sequence.length) {
       finishSooAhQte();
-      return;
     }
-    const section = Math.floor(audition.cueIndex / 2);
-    if (section !== audition.section) startSooAhQteSection(section);
   }
 
   function startSooAhQte() {
@@ -2027,13 +2025,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     audition.cueIndex = 0;
     audition.cueTimer = 0;
     audition.cueAnswered = false;
-    audition.cueInterval = 2.0;
+    audition.cueInterval = 3.0;
     audition.score = 0;
     const random = seededRandom(0x4e4f5641 + Math.floor(auditionTime * 1000) + audition.run * 97 + (selectedCharacter === 'Ted' ? 1 : 2));
     const choices = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
     audition.sequence = Array.from({ length: 8 }, () => choices[Math.floor(random() * choices.length)]);
     audition.section = -1;
-    startSooAhQteSection(0);
+    playAuditionClip('SooAh', 'SooAhAuditionSinging', { loop: true, speed: 3.2 });
     message = 'Soo-ah begins her audition. Follow the arrows with the beat.';
   }
 
@@ -2073,14 +2071,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       auditionStage.add(tedAuditionFigure);
       tedAuditionFigure.visible = false;
       tedAuditionFigure.scale.setScalar(0.5);
-      tedAuditionFigure.position.set(3.2, auditionStageTop, 2.3);
+      tedAuditionFigure.position.set(-1.6, auditionStageTop, 2.3);
       tedAuditionFigure.rotation.set(0, 0, 0);
       audition.figureTransition = null;
       followCamera.mode = 'front';
       followCamera.angle = 0;
       followCamera.targetAngle = 0;
       followCamera.pitch = 0.1;
-      followCamera.distance = 5.8;
+      followCamera.distance = camera.aspect < 1 ? 8.4 : 5.8;
       player.yaw = 0;
       player.pitch = 0.1;
       const ted = auditionRoots.Ted;
@@ -2088,16 +2086,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (selectedCharacter === 'Ted') {
         ted.position.set(0, auditionStageTop, auditionStageZ + 4.1);
         ted.rotation.y = Math.PI;
-        sooAhActor.position.set(1.4, auditionStageTop, auditionStageZ + 0.6);
-        sooAhActor.rotation.y = 0;
+        sooAhActor.position.set(1.7, auditionStageTop, auditionStageZ + 0.6);
+        sooAhActor.rotation.y = -Math.PI / 2;
         audition.phase = 'ted-enter-player';
         playAuditionClip('Ted', 'TedHappyGesture', { loop: true, speed: 1.2 });
         message = 'Soo-ah freezes under the stage lights. Walk Ted to his mark.';
       } else {
-        ted.position.set(-5.4, auditionStageTop, auditionStageZ + 0.6);
+        ted.position.set(-2.5, auditionStageTop, auditionStageZ + 0.6);
         ted.rotation.y = Math.PI / 2;
-        sooAhActor.position.set(1.2, auditionStageTop, auditionStageZ + 0.6);
-        sooAhActor.rotation.y = 0;
+        sooAhActor.position.set(1.7, auditionStageTop, auditionStageZ + 0.6);
+        sooAhActor.rotation.y = -Math.PI / 2;
         audition.phase = 'ted-enter-npc';
         audition.elapsed = 0;
         audition.phaseDuration = 2.3;
@@ -2136,7 +2134,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     root.position.z = clamp(root.position.z + z * speed * dt, auditionStageZ - 1.2, auditionStageZ + 4.1);
     if (root.position.z <= auditionStageZ + 0.95) {
       root.position.z = auditionStageZ + 0.95;
-      root.position.x = -1.1;
+      root.position.x = -0.4;
       root.rotation.y = 0;
       audition.walking = false;
       beginTedSinging();
@@ -2149,6 +2147,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const normalized = String(key).toLowerCase();
     if (!audition.sequence[audition.cueIndex]) return false;
     audition.cueAnswered = true;
+    playSooAhCueMove(normalized);
     if (normalized === audition.sequence[audition.cueIndex]) {
       audition.score++;
       message = `On the beat · ${audition.score} moves hit.`;
@@ -2172,10 +2171,22 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       audition.elapsed = Math.min(audition.phaseDuration, audition.elapsed + dt);
       const t = audition.elapsed / audition.phaseDuration;
       const eased = t * t * (3 - 2 * t);
-      auditionRoots.Ted.position.x = -5.4 + 4.2 * eased;
+      auditionRoots.Ted.position.x = -2.5 + 1.9 * eased;
       if (t >= 1) {
         auditionRoots.Ted.rotation.y = 0;
         beginTedSinging();
+      }
+      return;
+    }
+    if (audition.phase === 'sooah-enter') {
+      audition.elapsed = Math.min(audition.phaseDuration, audition.elapsed + dt);
+      const t = audition.elapsed / audition.phaseDuration;
+      const eased = t * t * (3 - 2 * t);
+      auditionRoots.SooAh.position.x = 1.7 + (0.8 - 1.7) * eased;
+      if (t >= 1) {
+        auditionRoots.SooAh.rotation.y = 0;
+        if (selectedCharacter === 'SooAh') startSooAhQte();
+        else startSooAhAutoPerformance();
       }
       return;
     }
@@ -2192,10 +2203,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     else if (audition.phase === 'ted-dance') beginTedThumbsUp();
     else if (audition.phase === 'ted-thumbs-up') beginTedLine();
     else if (audition.phase === 'ted-line') beginSooAhHappy();
-    else if (audition.phase === 'sooah-happy') {
-      if (selectedCharacter === 'SooAh') startSooAhQte();
-      else startSooAhAutoPerformance();
-    } else if (audition.phase === 'sooah-auto') startSooAhAutoSection(audition.autoSection + 1);
+    else if (audition.phase === 'sooah-happy') beginSooAhWalkIn();
+    else if (audition.phase === 'sooah-auto') startSooAhAutoSection(audition.autoSection + 1);
     else if (audition.phase === 'sooah-finale') {
       audition.phase = 'complete';
       audition.elapsed = 0;
@@ -2536,17 +2545,20 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         'ted-thumbs-up': 'Ted gives Soo-ah a thumbs-up',
         'ted-line': 'Ted encourages Soo-ah',
         'sooah-happy': 'Soo-ah finds her courage',
+        'sooah-enter': 'Soo-ah walks into the spotlight',
         'sooah-auto': 'Soo-ah dances and sings',
         'sooah-qte': `Soo-ah’s performance · ${audition.score} on beat`,
         'sooah-finale': 'Soo-ah finishes her audition',
         complete: 'Soo-ah completes the NOVA audition',
       };
       const prompt = audition.phase === 'ted-enter-player' ? '↑ · Walk Ted to the mark'
+        : audition.phase === 'sooah-enter' ? 'Soo-ah walks to her mark'
         : audition.phase === 'sooah-qte'
           ? `Beat ${Math.min(audition.cueIndex + 1, audition.sequence.length)}/${audition.sequence.length} · ${arrow[audition.sequence[audition.cueIndex]] ?? '♪'}`
           : audition.phase === 'complete' ? 'Audition complete' : 'Watch the performance';
       const hint = audition.phase === 'ted-enter-player'
         ? 'Arrow keys walk Ted · F starts his song at the stage mark'
+        : audition.phase === 'sooah-enter' ? 'Soo-ah walks into the spotlight'
         : audition.phase === 'sooah-qte' ? 'Press the shown arrow on each beat · missed cues never stop the audition' : 'Performance controls are active';
       return { task: tasks[audition.phase] ?? 'NOVA audition', prompt, message, hint, selectedCharacter, standing: false, walkingReady: false };
     }

@@ -78,7 +78,7 @@ export function buildAuditionStage(THREE) {
   micHead.rotation.z = Math.PI / 2;
   micHead.position.set(0, 1.64, 0.02);
   mic.add(micBase, micPole, micHead);
-  mic.position.set(2.6, 0, -0.8);
+  mic.position.set(-3.2, 0, -0.8);
   root.add(mic);
 
   const figure = new THREE.Group();
@@ -105,7 +105,7 @@ export function buildAuditionStage(THREE) {
   figureStand.castShadow = true;
   figure.add(figureStand);
   figure.scale.setScalar(0.5);
-  figure.position.set(3.2, 0.38, 2.3);
+  figure.position.set(-1.6, 0.38, 2.3);
   root.add(figure);
   figure.visible = false;
 
