@@ -2009,7 +2009,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const root = auditionRoots.SooAh;
     audition.cameraFocus = {
       x: root.position.x,
-      z: root.position.z + (camera.aspect < 1 ? 5.3 : 4.7),
+      z: root.position.z + (camera.aspect < 1 ? 4.0 : 3.7),
     };
   }
 
