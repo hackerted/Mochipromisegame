@@ -55,7 +55,7 @@ export function buildAuditionStage(THREE) {
   signContext.fillText('NOVA', signCanvas.width / 2, signCanvas.height / 2);
   const signTexture = new THREE.CanvasTexture(signCanvas);
   signTexture.colorSpace = THREE.SRGBColorSpace;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 1.45), new THREE.MeshBasicMaterial({
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), new THREE.MeshBasicMaterial({
     map: signTexture,
     side: THREE.DoubleSide,
     toneMapped: false,

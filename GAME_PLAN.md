@@ -81,13 +81,13 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 ## Next level: Home to the NOVA audition
 
-**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game. The current implementation slice transitions from the park ending straight to NOVA; the evening home scenes remain planned work.
+**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game. The playable slice now lets the selected character walk from the bench to a home waypoint before the NOVA stage; home interiors and evening scenes remain planned work.
 
 ### Story sequence
 
-1. **Leave the park:** Finish the current route after Soo-ah agrees to audition. Keep the chosen route and the shared promise in chapter state, then transition out of the park without replaying the conversation.
-2. **Go home that evening:** Show a short homecoming beat for both friends. Ted sets his Gundam figure aside and packs it; Soo-ah keeps the audition details and quietly rehearses. Use brief playable interactions or a compact montage rather than building two large explorable homes.
-3. **Meet the next morning:** Show a clear day-to-morning change. Ted and Soo-ah meet at a familiar street or transit landmark, then travel together to the NOVA building. The existing park roads can serve as the transition route; NOVA and its audition interior are new locations.
+1. **Leave the park:** After Soo-ah agrees to audition, the next F starts a map-guided walk home for the selected character. A top-left minimap marks the player, park roads/crossings, both homes, and the active home destination.
+2. **Go home that evening:** Ted’s route leads to the northwest Korean house; Soo-ah’s route leads to the northeast apartment. The current slice ends at the home exterior with an F prompt; interior home scenes and bedtime beats remain planned work.
+3. **Meet the next morning:** At home, F advances to the following morning and transitions to the NOVA stage. A playable street trip to NOVA can be added after a venue exterior and transit assets are chosen.
 4. **Soo-ah freezes:** At the audition, Soo-ah steps onto the stage, sees the judges and audience, and freezes. Give the player a brief moment to notice her fear before Ted helps.
 5. **Ted encourages her:** If Ted is selected, the player walks him onto the stage. If Soo-ah is selected, Ted enters as an NPC. Ted sings, performs the supplied Gangnam Style dance with his hands free, sets his figure on the stage edge, gives a thumbs-up, and says, “Over to you, chipmunk.” Soo-ah changes from terrified to happy, then walks from the stage wing to her mark.
 6. **Soo-ah performs:** If Soo-ah is selected, the player follows arrow cues through her singing, Hip Hop, Jazz, and Step Hip Hop clips. Each pressed arrow triggers a visible move. If Ted is selected, the same performance runs for Soo-ah as an NPC. Missed cues never block the ending.
@@ -115,7 +115,7 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 4. After the user selects music and reviews the actual Mixamo clips, map prompts only to those clips and measured beat times. Add small Blender keys for missing story gestures. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
 5. Verify both prior routes reach this level once; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed and remains on stage; the correct line plays once; all prompt outcomes reach the same completed-audition ending; normal controls return afterward.
 
-**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. Home scenes and music playback remain future work; the stage sequence already uses the reviewed animation files.
+**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. Home interiors, the trip from home to NOVA, judges/audience, and music playback remain future work; the map-guided walk and stage sequence use the reviewed animation files.
 
 ## Decisions still open
 

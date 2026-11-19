@@ -456,7 +456,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   // Sized for the 1 m tall characters. The story bench stays at the origin facing +Z (north); the park
   // is a 45 m square around it inside a hedge, with the city to go outside the hedge.
   const parkHalf = 22.6;
-  const parkLimit = parkHalf - 0.9;
+  let parkLimit = parkHalf - 0.9;
   const reserved = []; // { x, z, r }: trees and decor keep off these
   const obstacles = []; // { x, z, r }: solid for walkers
   const pathLines = []; // { points, halfWidth }
@@ -1273,6 +1273,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const standingCharacters = new Set();
   const characterRoots = { SooAh: sooAh, Ted: tedRoot };
   const parkCharacterRoots = { SooAh: sooAh, Ted: tedRoot };
+  const homeDestinations = {
+    Ted: { x: -18, z: 33.8, label: 'Ted’s home', marker: 'T' },
+    SooAh: { x: 18, z: 33.8, label: 'Soo-ah’s home', marker: 'S' },
+  };
+  const journey = { active: false, phase: 'none', destination: null, friend: null, departureElapsed: 0 };
   const auditionRoots = { SooAh: null, Ted: null };
   const auditionMixers = { SooAh: null, Ted: null };
   const auditionActions = { SooAh: null, Ted: null };
@@ -1788,6 +1793,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function walkSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
     if (audition.pending) return false;
     if (audition.active) return walkAuditionSelected({ directionX, directionZ, dt, run });
+    if (journey.active && journey.phase === 'at-home') return false;
     const name = selectedCharacter;
     const mixer = characterMixers[name];
     if (!mixer || emotionalStates[name]?.blocksMovement) return false;
@@ -2039,6 +2045,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (audition.active || audition.pending) return true;
     if (!auditionAccepted) return false;
     audition.pending = true;
+    journey.active = false;
+    journey.phase = 'none';
+    journey.destination = null;
+    parkLimit = parkHalf - 0.9;
     message = 'The next morning, Ted and Soo-ah arrive at NOVA.';
     loadAuditionAssets().then(() => {
       audition.pending = false;
@@ -2074,13 +2084,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       tedAuditionFigure.position.set(-1.6, auditionStageTop, 2.3);
       tedAuditionFigure.rotation.set(0, 0, 0);
       audition.figureTransition = null;
-      followCamera.mode = 'front';
+      followCamera.mode = 'free';
       followCamera.angle = 0;
       followCamera.targetAngle = 0;
       followCamera.pitch = 0.1;
       followCamera.distance = camera.aspect < 1 ? 8.4 : 5.8;
+      player.x = 0;
+      player.z = 9;
       player.yaw = 0;
-      player.pitch = 0.1;
+      player.pitch = -0.08;
       const ted = auditionRoots.Ted;
       const sooAhActor = auditionRoots.SooAh;
       if (selectedCharacter === 'Ted') {
@@ -2092,7 +2104,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         playAuditionClip('Ted', 'TedHappyGesture', { loop: true, speed: 1.2 });
         message = 'Soo-ah freezes under the stage lights. Walk Ted to his mark.';
       } else {
-        ted.position.set(-2.5, auditionStageTop, auditionStageZ + 0.6);
+        ted.position.set(-2.0, auditionStageTop, auditionStageZ + 0.6);
         ted.rotation.y = Math.PI / 2;
         sooAhActor.position.set(1.7, auditionStageTop, auditionStageZ + 0.6);
         sooAhActor.rotation.y = -Math.PI / 2;
@@ -2171,7 +2183,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       audition.elapsed = Math.min(audition.phaseDuration, audition.elapsed + dt);
       const t = audition.elapsed / audition.phaseDuration;
       const eased = t * t * (3 - 2 * t);
-      auditionRoots.Ted.position.x = -2.5 + 1.9 * eased;
+      auditionRoots.Ted.position.x = -2.0 + 1.4 * eased;
       if (t >= 1) {
         auditionRoots.Ted.rotation.y = 0;
         beginTedSinging();
@@ -2213,6 +2225,63 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
   }
 
+  function startHomeJourney() {
+    if (!auditionAccepted || audition.active || audition.pending || journey.active) return journey.active;
+    const name = selectedCharacter;
+    const destination = homeDestinations[name];
+    journey.active = true;
+    journey.phase = 'to-home';
+    journey.destination = destination;
+    journey.friend = name === 'Ted' ? 'SooAh' : 'Ted';
+    journey.departureElapsed = 0;
+    parkLimit = 42;
+    mrLeePatrolling = false;
+    if (sittingCharacters.has(name) && canStandSelected()) standSelected();
+    message = `They say goodbye. Follow the map to ${destination.label}.`;
+    return true;
+  }
+
+  function updateHomeJourney() {
+    if (!journey.active || journey.phase !== 'to-home') return;
+    const name = selectedCharacter;
+    const root = characterRoots[name];
+    if (Math.hypot(root.position.x - journey.destination.x, root.position.z - journey.destination.z) > 2.2) return;
+    journey.phase = 'at-home';
+    if (walkingCharacters.has(name)) {
+      characterActions[name]?.fadeOut(0.15);
+      walkingCharacters.delete(name);
+      delete movementModes[name];
+      fadingMovement[name] = 0.15;
+    }
+    characterMode[name] = 'standingIdle';
+    const label = name === 'Ted' ? 'Ted' : 'Soo-ah';
+    message = `${label} arrives home. Press F for the next morning at NOVA.`;
+  }
+
+  function mapState() {
+    if (!journey.active) return { visible: false };
+    const root = characterRoots[selectedCharacter];
+    const route = [];
+    if (journey.phase === 'to-home') {
+      if (root.position.z < 20.5 && Math.abs(root.position.x) < 9) route.push({ x: 0, z: 20.5 });
+      if (root.position.z < 33.1 && Math.abs(root.position.x) < 9) route.push({ x: 0, z: 33.1 });
+      route.push(journey.destination);
+    }
+    return {
+      visible: true,
+      phase: journey.phase,
+      player: { x: root.position.x, z: root.position.z, yaw: root.rotation.y },
+      destination: journey.destination,
+      route,
+      homes: Object.entries(homeDestinations).map(([name, home]) => ({
+        x: home.x,
+        z: home.z,
+        label: home.marker,
+        active: name === selectedCharacter,
+      })),
+    };
+  }
+
   function interact() {
     if (audition.pending) return true;
     if (audition.active) {
@@ -2222,7 +2291,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       return true;
     }
-    if (auditionAccepted) return startAudition();
+    if (journey.active) {
+      if (journey.phase === 'at-home') {
+        journey.active = false;
+        journey.phase = 'none';
+        journey.friend = null;
+        parkLimit = parkHalf - 0.9;
+        return startAudition();
+      }
+      return true;
+    }
+    if (auditionAccepted) return startHomeJourney();
     if (mochiEating) {
       message = 'Soo-ah is taking a bite…';
       return true;
@@ -2535,6 +2614,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (audition.pending) {
       return { task: 'The next morning at NOVA', prompt: 'Preparing the audition stage…', message, hint: 'Loading Ted and Soo-ah’s performance clips.' };
     }
+    if (journey.active) {
+      const label = selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah';
+      return journey.phase === 'at-home'
+        ? { task: `${label} is home for the night`, prompt: 'F · Next morning, go to NOVA', message, hint: 'The map shows home. Press F when you are ready for the audition.' }
+        : { task: `Walking home · ${Math.round(Math.hypot(characterRoots[selectedCharacter].position.x - journey.destination.x, characterRoots[selectedCharacter].position.z - journey.destination.z))} m to ${journey.destination.label}`, prompt: 'Follow the route on the map', message, hint: 'Arrows walk · Shift + arrows run · WASD moves the camera · follow the bright home marker' };
+    }
     if (audition.active) {
       const arrow = { arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' };
       const tasks = {
@@ -2563,7 +2648,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       return { task: tasks[audition.phase] ?? 'NOVA audition', prompt, message, hint, selectedCharacter, standing: false, walkingReady: false };
     }
     if (auditionAccepted) {
-      return { task: 'The next morning, Ted and Soo-ah go to NOVA.', prompt: 'F · Go to the audition', message, selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
+      return { task: 'Ted and Soo-ah say goodnight at the bench.', prompt: 'F · Walk home', message, hint: 'Follow the map to your home.', selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
     }
     const target = nearest();
     const label = selectedCharacter === 'Ted' ? 'Ted' : 'Soo-ah';
@@ -2606,6 +2691,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     updateMrLeePatrol(dt);
     for (const mixer of mixers) mixer.update(dt);
     updateAudition(dt);
+    updateHomeJourney();
     if (walkingCharacters.has('Ted')) groundTedDuringStand();
     if (standRootTransitions.SooAh) groundSooAhDuringStand();
     if (standRootTransitions.Ted) groundTedDuringStand();
@@ -2838,6 +2924,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   const debug = {
     startAudition: () => { auditionAccepted = true; return startAudition(); },
+    startHomeJourney: () => { auditionAccepted = true; return startHomeJourney(); },
+    getHomeState: () => ({ phase: journey.phase, selectedCharacter, position: characterRoots[selectedCharacter].position.toArray(), target: journey.destination, parkLimit, standing: standingCharacters.has(selectedCharacter), standingReady: standingReady.has(selectedCharacter), walking: walkingCharacters.has(selectedCharacter) }),
     getAuditionState: () => ({
       phase: audition.phase,
       selectedCharacter,
@@ -3192,5 +3280,5 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     },
   };
 
-  return { get scene() { return audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
+  return { get scene() { return audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
 }
