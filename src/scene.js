@@ -642,7 +642,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   movingKia.userData.traffic = true;
   movingKia.userData.trafficPhase = 0.08;
 
-  const mochiStoolPosition = { x: 2.8, z: 19.8 };
+  const mochiStoolPosition = { x: 0.5, z: 18.3 };
   const mochiStool = new T.Group();
   mochiStool.name = 'MochiStool';
   const stoolWood = new T.MeshStandardMaterial({ color: '#805033', roughness: 0.82 });
@@ -675,7 +675,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const mochiItem = mochiAsset.scene.clone(true);
   const rawMochiBounds = new T.Box3().setFromObject(mochiItem);
   const rawMochiSize = rawMochiBounds.getSize(new T.Vector3());
-  const mochiScale = new T.Vector3(0.12 / rawMochiSize.x, 0.12 / rawMochiSize.y, 0.12 / rawMochiSize.z);
+  const mochiScale = new T.Vector3().setScalar(0.3 / rawMochiSize.y);
   mochiItem.scale.copy(mochiScale);
   const mochiOnStoolPosition = new T.Vector3(
     -rawMochiBounds.getCenter(new T.Vector3()).x * mochiScale.x,
@@ -688,7 +688,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mochiOnStoolPosition.z,
   );
   mochiItem.name = 'MochiItem';
+  mochiItem.visible = true;
   mochiStool.add(mochiItem);
+  const stoolMochiStick = mochiSkewerAsset.scene.getObjectByName('DangoStick').clone(true);
+  stoolMochiStick.name = 'StoolMochiStick';
+  stoolMochiStick.scale.setScalar(1.7);
+  stoolMochiStick.position.y = 0.434;
+  mochiStool.add(stoolMochiStick);
   const heldMochi = mochiHeldAsset.scene.clone(true);
   heldMochi.name = 'HeldMochiBite';
   heldMochi.visible = false;
@@ -1691,6 +1697,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (!hand) return false;
     hand.add(mochiItem);
     mochiItem.visible = false;
+    stoolMochiStick.visible = false;
     mochiItem.scale.copy(mochiScale);
     hand.updateWorldMatrix(true, false);
     characterRoots[name].updateMatrixWorld(true);
@@ -2037,8 +2044,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const choices = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
     audition.sequence = Array.from({ length: 8 }, () => choices[Math.floor(random() * choices.length)]);
     audition.section = -1;
-    playAuditionClip('SooAh', 'SooAhAuditionSinging', { loop: true, speed: 3.2 });
-    message = 'Soo-ah begins her audition. Follow the arrows with the beat.';
+    playAuditionClip('SooAh', 'SooAhAuditionIdle', { loop: true, speed: 1 });
+    message = 'Soo-ah waits for the first beat. Press the shown arrow to begin.';
   }
 
   function startAudition() {
@@ -3058,6 +3065,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       heldMochi.scale.setScalar(1);
       mochiItem.position.copy(mochiOnStoolPosition);
       mochiItem.rotation.set(0, 0, 0);
+      mochiStool.add(stoolMochiStick);
+      stoolMochiStick.visible = true;
+      stoolMochiStick.position.set(0, 0.434, 0);
+      stoolMochiStick.scale.setScalar(1.7);
       mrLeeAware = false;
       placeAtBenchAnchor('Ted', mochiStoolPosition);
       const pickupTarget = nearest();
