@@ -2095,9 +2095,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       followCamera.angle = 0;
       followCamera.targetAngle = 0;
       followCamera.pitch = 0.1;
-      followCamera.distance = camera.aspect < 1 ? 8.4 : 5.8;
       player.x = 0;
-      player.z = 9;
+      player.z = camera.aspect < 1 ? 7.5 : 6.2;
       player.yaw = 0;
       player.pitch = -0.08;
       const ted = auditionRoots.Ted;
@@ -2235,6 +2234,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function startHomeJourney() {
     if (!auditionAccepted || !mochiShared || !mochiConsumed || audition.active || audition.pending || journey.active) return journey.active;
     const name = selectedCharacter;
+    mochiCameraTarget = null;
+    if (followCamera.mode !== 'free') setCameraView('back');
     const destination = homeDestinations[name];
     journey.active = true;
     journey.phase = 'to-home';
@@ -2696,9 +2697,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (followCamera.mode === 'free') {
       focus.set(player.x, 1.48, player.z);
       camera.position.copy(focus);
-      camera.rotation.order = 'YXZ';
-      camera.rotation.y = player.yaw;
-      camera.rotation.x = player.pitch;
+      camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
     }
     const trafficU = (t * trafficSpeed / trafficLength + movingKia.userData.trafficPhase) % 1;
     roadCurve.getPointAt(trafficU, trafficPoint);
