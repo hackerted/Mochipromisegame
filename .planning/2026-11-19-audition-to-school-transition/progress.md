@@ -17,6 +17,7 @@
 - Reused the copied school GLTF in a separate school scene and returned the existing Ted/Soo-ah models and mixers after the audition.
 - Added shared school dialogue variants for Ted and Soo-ah; Mr. Lee remains absent and uninformed.
 - Updated controls for the school courtyard and kept the two-shot camera for the conversation; after the dialogue the camera remains independent and the selected character can move.
+- Committed and pushed as `caf6b33` on `feature/mochi-stool-give`; main remains untouched and `.DS_Store` was not staged.
 
 ### Test Results
 | Test | Expected | Actual | Status |

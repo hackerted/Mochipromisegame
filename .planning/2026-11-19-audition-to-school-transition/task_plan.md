@@ -4,7 +4,7 @@
 After a successful NOVA audition, show the judges accepting Soo-ah, let Ted and Soo-ah celebrate, then transition both playable routes into the existing school setting for a shared conversation about telling Mr. and Mrs. Lee.
 
 ## Next Step
-Deliver the verified feature-branch update; do not merge it into main until approved.
+Leave the verified feature branch available for review; main remains untouched.
 
 ## Current Phase
 Phase 5: Delivery
