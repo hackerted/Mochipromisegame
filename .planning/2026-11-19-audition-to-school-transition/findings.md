@@ -30,6 +30,8 @@
 - First browser pass confirmed the judge actors load, score UI works, and the failed-audition retry remains active. The Ted route reached the existing school scene after NOVA selected Soo-ah.
 - The first family-home screenshot showed the camera aimed away from the house and children; Mrs Lee’s FBX appeared black because FBXLoader could not resolve its `fbm/texture_*` reference. The source MrsLee and judge GLBs contain matching 4K texture atlases that can be extracted and applied to the skinned FBX actors.
 - Mr Lee carried a patrol stride into the home shot. Reset his family pose to a neutral stance before the conversation.
+- Applying the GLB atlas with FBX’s V orientation (`flipY=true`) restores Mrs Lee’s green cardigan, cream blouse and pink skirt. The final browser screenshot confirms her colors are correct.
+- The family transition now measures each actor’s world-space feet and offsets the root to the porch-path surface; the closer screenshot shows Ted’s shoes on the path instead of below it.
 - The Ted-controlled route was verified end-to-end through the live score panel, NOVA acceptance, school dialogue, Lee home, and the complete family conversation. The earlier low-score Soo-ah attempt still entered the retry state.
 - The home camera and material fix were visually checked; the narrow portrait viewport does not show the full-width judge panel in the dance shot, so the score HUD remains the clear live scoring cue. The seated judge actors are positioned for the final score reveal.
 

@@ -49,3 +49,4 @@
 - Corrected the family-home camera to show the house and all four characters, and reset Mr Lee’s patrol animation before the dialogue.
 - Browser verified the Ted route reaches NOVA, shows three live judge scores, preserves the school conversation, and opens the family home. The family screenshot shows both parents and children at the house; the full dialogue reaches its completion state.
 - Browser testing also confirmed that a low cue score stays on the audition retry path. The final portrait viewport shows the live scores and the home family clearly; the judge actors remain off-camera during the close performance shot and are staged for the separate score reveal.
+- Follow-up texture check corrected the FBX/glTF V flip; Mrs Lee now renders with the expected cardigan, blouse and pink skirt. The family transition aligns all actor feet to the porch path from their world bounds, and a closer screenshot shows Ted standing on the surface.

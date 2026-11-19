@@ -1225,7 +1225,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         const source = auditionJudgeSources[index];
         const clip = asset.animations?.[0];
         if (!clip) throw new Error(`No seated animation in ${source.file}`);
-        applyCharacterTexture(asset, judgeTextures[index], maxAnisotropy);
+        applyCharacterTexture(asset, judgeTextures[index], maxAnisotropy, true);
         fitToHeight(asset, 1.48);
         asset.name = `NOVAJudge_${source.title.replaceAll(' ', '')}`;
         asset.visible = false;
@@ -2665,7 +2665,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         const clip = asset.animations?.[0];
         if (!clip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
         mrsLeeRoot = asset;
-        applyCharacterTexture(mrsLeeRoot, texture, maxAnisotropy);
+        applyCharacterTexture(mrsLeeRoot, texture, maxAnisotropy, true);
         fitToHeight(mrsLeeRoot, 1.48);
         mrsLeeRoot.name = 'MrsLeeHome';
         mrsLeeRoot.visible = false;
@@ -2740,6 +2740,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
         mrsLeeGestureAction.clampWhenFinished = true;
         mrsLeeGestureAction.play();
+      }
+      for (const root of [parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeRoot, mrsLeeRoot]) {
+        root.updateMatrixWorld(true);
+        const bounds = new T.Box3().setFromObject(root);
+        root.position.y += familyPath.position.y - bounds.min.y;
+        root.updateMatrixWorld(true);
       }
 
       followCamera.mode = 'free';
