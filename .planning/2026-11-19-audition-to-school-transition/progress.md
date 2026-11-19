@@ -57,3 +57,12 @@
 - Browser verified Ted’s feet at ground level and the complete parent dialogue. No JavaScript errors occurred.
 - Switched the home Mr Lee actor to the user’s `mr lee/Talking.fbx` rig so its embedded talking clip drives the actor; Mrs Lee uses her separate `Talking.fbx` clip while retaining the textured gesture model.
 - Browser v329 verified Ted’s feet at the path and his home scale beside Soo-ah. Browser v330 verified the full confrontation dialogue and both parents’ talking animation clips.
+
+## Session: 2026-11-19 — School-to-cafe journey
+- **Current phase:** 8 — playable route from the school entrance to Lee’s Cafe.
+- Reused the main park scene’s existing road ring, south/north crossings, gate path, park loop, north path and single Lee’s Cafe model; added only the two short connecting paths.
+- Positioned the school scene on the same world map and switch the existing character roots to the park scene without changing their positions. The school building stays in its own school view to keep it from obstructing the street camera.
+- Added the follower controller with existing turn, walk and run clips, a paired follow camera, a 2.2 m separation limit, optional one-time conversations, a cafe marker/route on the minimap, and F entry only after both reach the entrance.
+- Browser v337 followed the Ted-selected route through audition success and the school conversation; the cafe objective and minimap appeared at the south crossing. Arrow movement crossed the road with both characters visible, and the one-time first conversation displayed Soo-ah’s nervous line and Ted’s reassurance.
+- `node --check --input-type=module < src/scene.js` and `git diff --check` passed.
+- **Remaining browser check:** second conversation and arriving at the cafe entrance to verify the F handoff into the existing family scene.

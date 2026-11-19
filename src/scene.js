@@ -339,16 +339,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     loadJsonClip('./assets/clips/SooAhSitting.json'),
     gltf(gltfLoader, './assets/school/school_building/scene.gltf'),
   ]);
+  const schoolMapZ = -40;
   const schoolGround = new T.Mesh(new T.PlaneGeometry(70, 70), new T.MeshStandardMaterial({ color: '#81915e', roughness: 1 }));
   schoolGround.name = 'SchoolGround';
   schoolGround.rotation.x = -Math.PI / 2;
-  schoolGround.position.y = -0.035;
+  schoolGround.position.set(0, -0.035, schoolMapZ);
   schoolGround.receiveShadow = true;
   schoolScene.add(schoolGround);
   const schoolCourtyard = new T.Mesh(new T.PlaneGeometry(38, 30), new T.MeshStandardMaterial({ color: '#aaa99f', roughness: 0.95 }));
   schoolCourtyard.name = 'SchoolCourtyard';
   schoolCourtyard.rotation.x = -Math.PI / 2;
-  schoolCourtyard.position.set(0, -0.02, 5);
+  schoolCourtyard.position.set(0, -0.02, schoolMapZ + 5);
   schoolCourtyard.receiveShadow = true;
   schoolScene.add(schoolCourtyard);
   const schoolBuilding = schoolAsset.scene;
@@ -357,7 +358,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const schoolCenter = schoolBounds.getCenter(new T.Vector3());
   const schoolScale = 8;
   schoolBuilding.scale.setScalar(schoolScale);
-  schoolBuilding.position.set(-schoolCenter.x * schoolScale, -schoolBounds.min.y * schoolScale, -10 - schoolCenter.z * schoolScale);
+  schoolBuilding.position.set(-schoolCenter.x * schoolScale, -schoolBounds.min.y * schoolScale, schoolMapZ - 10 - schoolCenter.z * schoolScale);
   setShadows(schoolBuilding);
   schoolScene.add(schoolBuilding);
   const familyGround = new T.Mesh(new T.PlaneGeometry(28, 28), new T.MeshStandardMaterial({ color: '#91a16f', roughness: 1 }));
@@ -567,6 +568,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   addPath('ParkNorthPath', [[0, 17.5], [0, 20], [0, parkHalf + 2.1], [0, roadHalf - 2.6], [0, roadHalf + 2.6], [0, roadHalf + 4.5]], { lift: 0.018 });
   addPath('MochiStoolPath', [[0, 20], [2.8, 19.8]], { width: 1.2, lift: 0.018 });
   addPath('ParkGatePath', [[0, -roadHalf - 4.5], [0, -roadHalf - 2.6], [0, -roadHalf + 2.6], [0, -parkHalf - 2.1], [0, -16], [-3, -9], [-7, -3], [-9.4, 4.8]], { lift: 0.018 });
+  addPath('SchoolSouthConnectorPath', [[0, schoolMapZ + 4.5], [0, -33.1]], { width: 1.8, lift: 0.018 });
+  addPath('CafeEntrancePath', [[0, 33.1], [-2, 32.9], [-4, 32.45], [-5, 32.2]], { width: 1.8, lift: 0.018 });
   addPath('ParkEastPath', [[11.5, 12.5], [17, 12.5], [parkHalf + 2.1, 12.5], [roadHalf - 2.6, 12.5], [roadHalf + 2.6, 12.5], [roadHalf + 4.5, 12.5]], { lift: 0.018 });
   addPath('ParkWestPath', [[-11.5, 12.5], [-17, 12.5], [-parkHalf - 2.1, 12.5], [-roadHalf + 2.6, 12.5], [-roadHalf - 2.6, 12.5], [-roadHalf - 4.5, 12.5]], { lift: 0.018 });
 
@@ -1405,6 +1408,31 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   };
   const journey = { active: false, phase: 'none', destination: null };
   const school = { active: false, phase: 'inactive', dialogueIndex: 0, auditionPassed: false, arrived: 0 };
+  const cafeJourney = {
+    active: false,
+    phase: 'inactive',
+    destination: { x: -5, z: 32.2, label: "Lee's Cafe" },
+    talks: [false, false],
+    talking: null,
+    runRequested: false,
+  };
+  const cafeRouteNodes = [
+    { x: 0, z: -33.1 }, { x: 0, z: -28.6 }, { x: 0, z: -24.7 }, { x: 0, z: -16 },
+    { x: -3, z: -9 }, { x: -7, z: -3 }, { x: -9.4, z: 4.8 }, { x: -11, z: 7 },
+    { x: -11.5, z: 12.5 }, { x: -7, z: 16.5 }, { x: 0, z: 17.5 }, { x: 0, z: 24.7 },
+    { x: 0, z: 31.2 }, { x: 0, z: 33.1 }, { x: -2, z: 32.9 }, { x: -4, z: 32.45 },
+    { x: -5, z: 32.2 },
+  ];
+  const cafeTalkStops = [
+    { x: 0, z: -16, lines: [
+      'Soo-ah: I keep imagining Dad saying no. I am more nervous than I expected.',
+      'Ted: We can listen to what worries him and explain why this matters to you.',
+    ] },
+    { x: -8, z: 3, lines: [
+      'Ted: Passing the audition is something to be proud of, Soo-ah. You worked hard for it.',
+      'Soo-ah: Thank you. It helps knowing you are coming with me.',
+    ] },
+  ];
   const family = { active: false, pending: false, phase: 'inactive', dialogueIndex: 0, mrLeePose: null };
   let familyAssetsPromise = null;
   let mrLeeHomeRoot = null;
@@ -1834,7 +1862,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function updateFollowCamera(dt) {
     const root = characterRoots[mochiEating?.recipient ?? mochiCameraTarget ?? selectedCharacter];
     followCamera.angle += wrapAngle(followCamera.targetAngle - followCamera.angle) * (1 - Math.exp(-dt * 6));
-    followTarget.set(root.position.x, root.position.y + 0.7, root.position.z);
+    if (cafeJourney.active) {
+      const companion = characterRoots[selectedCharacter === 'Ted' ? 'SooAh' : 'Ted'];
+      const pairDistance = Math.hypot(root.position.x - companion.position.x, root.position.z - companion.position.z);
+      followCamera.distance = Math.max(followCamera.distance, 4.8, pairDistance * 1.8 + 2.1);
+      followTarget.set(
+        (root.position.x + companion.position.x) / 2,
+        (root.position.y + companion.position.y) / 2 + 0.92,
+        (root.position.z + companion.position.z) / 2,
+      );
+    } else {
+      followTarget.set(root.position.x, root.position.y + 0.7, root.position.z);
+    }
     const horizontal = Math.cos(followCamera.pitch) * followCamera.distance;
     camera.position.set(
       followTarget.x + Math.sin(followCamera.angle) * horizontal,
@@ -1979,8 +2018,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (audition.active) return walkAuditionSelected({ directionX, directionZ, dt, run });
     if (family.active || family.pending) return false;
     if (school.active && school.phase === 'conversation') return false;
+    if (cafeJourney.active && (cafeJourney.talking || cafeJourney.phase === 'at-cafe')) return false;
     if (journey.active && journey.phase === 'at-home') return false;
+    if (cafeJourney.active) cafeJourney.runRequested = run && Math.hypot(directionX, directionZ) > 0.01;
     const name = selectedCharacter;
+    const inputLength = Math.hypot(directionX, directionZ);
+    if (cafeJourney.active) {
+      const companion = characterRoots[name === 'Ted' ? 'SooAh' : 'Ted'].position;
+      const root = characterRoots[name].position;
+      const toCompanionX = companion.x - root.x;
+      const toCompanionZ = companion.z - root.z;
+      if (Math.hypot(toCompanionX, toCompanionZ) > 2.2
+        && inputLength > 0.01
+        && directionX * toCompanionX + directionZ * toCompanionZ < 0) {
+        stopCafeWalker(name);
+        return false;
+      }
+    }
     const mixer = characterMixers[name];
     if (!mixer || emotionalStates[name]?.blocksMovement) return false;
     if (!standingCharacters.has(name) || sittingDown.has(name)) return false;
@@ -1991,7 +2045,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       ensureClip(name === 'SooAh' ? 'SooAhRun' : 'TedRun').catch((error) => console.error(error));
     }
     const root = characterRoots[name];
-    const inputLength = Math.hypot(directionX, directionZ);
     const hasInput = inputLength > 0.01;
     if (!hasInput) {
       delete pendingMoves[name];
@@ -2046,8 +2099,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const step = currentSpeeds[name] * dt;
     const oldX = root.position.x;
     const oldZ = root.position.z;
-    const desiredX = clamp(oldX + direction.x * step, -parkLimit, parkLimit);
-    const desiredZ = clamp(oldZ + direction.z * step, -parkLimit, parkLimit);
+    const movementLimitX = school.active ? 34 : parkLimit;
+    const minZ = school.active ? schoolMapZ - 34 : -parkLimit;
+    const maxZ = school.active ? schoolMapZ + 34 : parkLimit;
+    const desiredX = clamp(oldX + direction.x * step, -movementLimitX, movementLimitX);
+    const desiredZ = clamp(oldZ + direction.z * step, minZ, maxZ);
     const next = school.active
       ? { x: desiredX, z: desiredZ }
       : moveRootWithBenchCollision(name, root, desiredX, desiredZ);
@@ -2067,12 +2123,87 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       walkingCharacters.add(name);
       characterMode[name] = desiredMode;
     }
-    root.position.x = clamp(next.x, -parkLimit, parkLimit);
-    root.position.z = clamp(next.z, -parkLimit, parkLimit);
+    root.position.x = clamp(next.x, -movementLimitX, movementLimitX);
+    root.position.z = clamp(next.z, minZ, maxZ);
     root.position.y = school.active ? 0 : parkHeightAt(root.position.x, root.position.z);
     player.x += root.position.x - oldX;
     player.z += root.position.z - oldZ;
     return true;
+  }
+
+  function stopCafeWalker(name) {
+    if (!walkingCharacters.has(name)) return;
+    characterActions[name]?.fadeOut(0.16);
+    fadingMovement[name] = 0.16;
+    walkingCharacters.delete(name);
+    delete movementModes[name];
+    characterMode[name] = 'standingIdle';
+  }
+
+  function updateCafeCompanion(dt) {
+    if (!cafeJourney.active || cafeJourney.phase === 'at-cafe' || cafeJourney.talking) return;
+    const leaderName = selectedCharacter;
+    const name = leaderName === 'Ted' ? 'SooAh' : 'Ted';
+    const leader = characterRoots[leaderName];
+    const root = characterRoots[name];
+    const side = name === 'Ted' ? 0.58 : -0.58;
+    const targetX = leader.position.x - Math.sin(leader.rotation.y) * 0.72 + Math.cos(leader.rotation.y) * side;
+    const targetZ = leader.position.z - Math.cos(leader.rotation.y) * 0.72 - Math.sin(leader.rotation.y) * side;
+    const dx = targetX - root.position.x;
+    const dz = targetZ - root.position.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 0.48) {
+      stopCafeWalker(name);
+      return;
+    }
+    if (!standingReady.has(name) || turnStates[name]) return;
+
+    const targetYaw = Math.atan2(dx, dz);
+    const turnDelta = wrapAngle(targetYaw - root.rotation.y);
+    if (Math.abs(turnDelta) > 0.55) {
+      const direction = turnDelta < 0 ? 'left' : 'right';
+      if (turnClips[name]?.[direction]) {
+        stopCafeWalker(name);
+        beginTurn(name, direction, Math.min(Math.abs(turnDelta), Math.PI / 2));
+        return;
+      }
+    }
+    if (Math.abs(turnDelta) > 0.12) {
+      stopCafeWalker(name);
+      root.rotation.y += turnDelta * Math.min(1, dt * 5);
+      return;
+    }
+    root.rotation.y = targetYaw;
+
+    const running = cafeJourney.runRequested || distance > 1.7;
+    if (running && !runningClips[name]) {
+      ensureClip(name === 'SooAh' ? 'SooAhRun' : 'TedRun').catch((error) => console.error(error));
+    }
+    const runClip = runningClips[name];
+    const desiredMode = running && runClip ? 'running' : 'walking';
+    const clip = desiredMode === 'running' ? runClip : walkClipFor(name);
+    if (!clip) {
+      ensureClip(name === 'Ted' && activeWalkVariant.Ted === 'alternative' ? 'TedWalkAlternative' : `${name}Walk`)
+        .catch((error) => console.error(error));
+      return;
+    }
+    const speed = desiredMode === 'running' ? runSpeeds[name] : walkSpeeds[name];
+    const step = Math.min(distance - 0.42, speed * dt);
+    if (step <= 0) return;
+    const next = moveRootWithBenchCollision(name, root, root.position.x + (dx / distance) * step, root.position.z + (dz / distance) * step);
+    if (Math.hypot(next.x - root.position.x, next.z - root.position.z) < 0.0005) {
+      stopCafeWalker(name);
+      return;
+    }
+    if (movementModes[name] !== desiredMode) {
+      playClip(name, clip, { loop: true, fade: 0.18 });
+      movementModes[name] = desiredMode;
+      walkingCharacters.add(name);
+      characterMode[name] = desiredMode;
+    }
+    root.position.x = next.x;
+    root.position.z = next.z;
+    root.position.y = parkHeightAt(next.x, next.z);
   }
 
   function look(dx, dy) {
@@ -2605,8 +2736,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     characterRoots.Ted = parkCharacterRoots.Ted;
     characterRoots.SooAh = parkCharacterRoots.SooAh;
     const schoolStarts = {
-      Ted: { x: -0.55, z: 4.5, yaw: Math.PI / 2 },
-      SooAh: { x: 0.55, z: 4.5, yaw: -Math.PI / 2 },
+      Ted: { x: -0.55, z: schoolMapZ + 4.5, yaw: Math.PI / 2 },
+      SooAh: { x: 0.55, z: schoolMapZ + 4.5, yaw: -Math.PI / 2 },
     };
     const completeArrival = (name) => {
       if (!standingPoses[name]) restoreStandingPose(name);
@@ -2670,7 +2801,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     followCamera.mode = 'free';
     player.x = 0;
-    player.z = 8;
+    player.z = schoolMapZ + 8;
     player.yaw = 0;
     player.pitch = -0.08;
     message = 'The next school day begins. Ted and Soo-ah meet at the school entrance.';
@@ -2686,7 +2817,95 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (school.dialogueIndex >= lines.length) school.phase = 'ready-to-tell';
       return true;
     }
-    return startFamilyVisit();
+    return startCafeJourney();
+  }
+
+  function startCafeJourney() {
+    if (!school.active || school.phase !== 'ready-to-tell' || !school.auditionPassed || cafeJourney.active) return false;
+    cafeJourney.active = true;
+    cafeJourney.phase = 'walking';
+    cafeJourney.talks = [false, false];
+    cafeJourney.talking = null;
+    cafeJourney.runRequested = false;
+    school.active = false;
+    school.phase = 'complete';
+    parkLimit = 42;
+    scene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh);
+    for (const name of ['Ted', 'SooAh']) {
+      standingCharacters.add(name);
+      standingReady.add(name);
+      characterRoots[name].visible = true;
+    }
+    followCamera.distance = 5.1;
+    followCamera.pitch = 0.24;
+    followCamera.mode = 'back';
+    followCamera.angle = Math.PI;
+    followCamera.targetAngle = Math.PI;
+    player.yaw = Math.PI;
+    message = 'Ted and Soo-ah leave school together for Lee’s Cafe.';
+    return true;
+  }
+
+  function startCafeTalk(index) {
+    const stop = cafeTalkStops[index];
+    if (!cafeJourney.active || !stop || cafeJourney.talks[index]) return false;
+    cafeJourney.talks[index] = true;
+    cafeJourney.talking = { index, line: 0 };
+    for (const name of ['Ted', 'SooAh']) {
+      stopCafeWalker(name);
+      if (turnStates[name]) {
+        delete turnStates[name];
+        delete turningDirection[name];
+        turningCharacters.delete(name);
+        characterMixers[name].stopAllAction();
+        characterMixers[name].update(0);
+        restoreStandingPose(name);
+        characterActions[name] = null;
+      }
+      delete movementModes[name];
+      characterMode[name] = 'standingIdle';
+    }
+    const ted = characterRoots.Ted.position;
+    const sooAh = characterRoots.SooAh.position;
+    facingTargets.Ted = Math.atan2(sooAh.x - ted.x, sooAh.z - ted.z);
+    facingTargets.SooAh = Math.atan2(ted.x - sooAh.x, ted.z - sooAh.z);
+    return advanceCafeTalk();
+  }
+
+  function advanceCafeTalk() {
+    const talk = cafeJourney.talking;
+    if (!talk) return false;
+    const lines = cafeTalkStops[talk.index].lines;
+    message = lines[talk.line++];
+    if (talk.line >= lines.length) {
+      cafeJourney.talking = null;
+      delete facingTargets.Ted;
+      delete facingTargets.SooAh;
+    }
+    return true;
+  }
+
+  function nearbyCafeTalk() {
+    if (!cafeJourney.active || cafeJourney.talking) return -1;
+    const player = characterRoots[selectedCharacter].position;
+    const companion = characterRoots[selectedCharacter === 'Ted' ? 'SooAh' : 'Ted'].position;
+    return cafeTalkStops.findIndex((stop, index) => !cafeJourney.talks[index]
+      && Math.hypot(player.x - stop.x, player.z - stop.z) < 2.6
+      && Math.hypot(companion.x - stop.x, companion.z - stop.z) < 4.2);
+  }
+
+  function updateCafeJourney() {
+    if (!cafeJourney.active || cafeJourney.talking || cafeJourney.phase === 'at-cafe') return;
+    const goal = cafeJourney.destination;
+    const ted = characterRoots.Ted.position;
+    const sooAh = characterRoots.SooAh.position;
+    if (Math.hypot(ted.x - goal.x, ted.z - goal.z) <= 1.7
+      && Math.hypot(sooAh.x - goal.x, sooAh.z - goal.z) <= 1.7) {
+      cafeJourney.phase = 'at-cafe';
+      stopCafeWalker('Ted');
+      stopCafeWalker('SooAh');
+      message = 'Ted and Soo-ah have reached the entrance to Lee’s Cafe.';
+    }
   }
 
   function loadFamilyAssets() {
@@ -2800,6 +3019,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       family.dialogueIndex = 0;
       school.active = false;
       school.phase = 'complete';
+      cafeJourney.active = false;
+      cafeJourney.phase = 'complete';
       mrLeePatrolling = false;
       mrLeeAware = false;
 
@@ -2897,6 +3118,27 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function mapState() {
+    if (cafeJourney.active) {
+      const root = characterRoots[selectedCharacter];
+      let nearestRouteIndex = 0;
+      let nearestRouteDistance = Infinity;
+      for (let i = 0; i < cafeRouteNodes.length; i++) {
+        const point = cafeRouteNodes[i];
+        const distance = Math.hypot(root.position.x - point.x, root.position.z - point.z);
+        if (distance < nearestRouteDistance) {
+          nearestRouteDistance = distance;
+          nearestRouteIndex = i;
+        }
+      }
+      return {
+        visible: true,
+        phase: cafeJourney.phase,
+        player: { x: root.position.x, z: root.position.z, yaw: root.rotation.y },
+        destination: cafeJourney.destination,
+        goal: { ...cafeJourney.destination, label: 'C' },
+        route: cafeRouteNodes.slice(nearestRouteIndex),
+      };
+    }
     if (!journey.active) return { visible: false };
     const root = characterRoots[selectedCharacter];
     const route = [];
@@ -2924,6 +3166,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (audition.pending) return true;
     if (family.pending) return true;
     if (family.active) return advanceFamilyDialogue();
+    if (cafeJourney.talking) return advanceCafeTalk();
+    if (cafeJourney.active) {
+      const talkIndex = nearbyCafeTalk();
+      if (talkIndex >= 0) return startCafeTalk(talkIndex);
+      if (cafeJourney.phase === 'at-cafe') return startFamilyVisit();
+      message = 'Keep walking together to the entrance of Lee’s Cafe.';
+      return true;
+    }
     if (school.active) return advanceSchoolDialogue();
     if (audition.active) {
       if (audition.phase === 'retry') {
@@ -3284,15 +3534,38 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (school.active) {
       const task = school.phase === 'arrival' ? 'Next school day · Seoul school entrance'
         : school.phase === 'conversation' ? 'Ted and Soo-ah discuss telling Mr. and Mrs. Lee'
-          : 'After class · tell Mr. and Mrs. Lee together';
+          : 'After class · walk together to Lee’s Cafe';
       return {
         task,
         prompt: school.phase === 'conversation' ? 'F · Continue conversation'
-          : school.phase === 'ready-to-tell' ? 'F · Go to Lee’s home' : '',
+          : school.phase === 'ready-to-tell' ? 'F · Walk to Lee’s Cafe' : '',
         message,
         hint: school.phase === 'conversation'
           ? 'Ted and Soo-ah are together at school. Mr. Lee does not know about the audition yet.'
           : 'Arrows walk · Shift + arrows run · WASD moves the camera',
+        selectedCharacter,
+        standing: standingCharacters.has(selectedCharacter),
+        walkingReady: standingReady.has(selectedCharacter),
+      };
+    }
+    if (cafeJourney.active) {
+      const talkIndex = nearbyCafeTalk();
+      const companionName = selectedCharacter === 'Ted' ? 'Soo-ah' : 'Ted';
+      const task = cafeJourney.phase === 'at-cafe' ? 'At Lee’s Cafe · both characters have arrived'
+        : 'Walk together to Lee’s Cafe';
+      const prompt = cafeJourney.talking ? 'F · Continue conversation'
+        : cafeJourney.phase === 'at-cafe' ? 'F · Enter Lee’s Cafe'
+          : talkIndex >= 0 ? 'F · Talk together'
+            : '';
+      const hintText = cafeJourney.talking
+        ? 'The walk pauses while they talk.'
+        : cafeJourney.phase === 'at-cafe' ? 'Both are at the cafe entrance. Press F to continue the story.'
+          : `Arrows walk · Shift + arrows run · WASD moves the camera · stay with ${companionName}`;
+      return {
+        task,
+        prompt,
+        message,
+        hint: hintText,
         selectedCharacter,
         standing: standingCharacters.has(selectedCharacter),
         walkingReady: standingReady.has(selectedCharacter),
@@ -3470,6 +3743,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (sittingCharacters.has(name) || sittingDown.has(name) || characterMode[name] === 'standingUp') clampSeatedPelvis(name);
     }
     updateMochiEating(dt);
+    updateCafeCompanion(dt);
+    updateCafeJourney();
     // Last, so the camera sees where every root ended up this frame.
     if (followCamera.mode !== 'free') updateFollowCamera(dt);
     if (debugRecording) {

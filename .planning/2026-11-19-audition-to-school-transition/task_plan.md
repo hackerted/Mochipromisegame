@@ -4,10 +4,10 @@
 After a successful NOVA audition, show the judges accepting Soo-ah, let Ted and Soo-ah celebrate, then transition both playable routes into the existing school setting for a shared conversation about telling Mr. and Mrs. Lee.
 
 ## Next Step
-Commit and push the verified floor/dialogue fix on this feature branch; leave `main` unchanged.
+Finish the cafe-route review, then commit and push this feature branch; leave `main` unchanged.
 
 ## Current Phase
-Phase 7: Ted grounding and family confrontation — complete
+Phase 8: Walk from school to Lee’s Cafe — implementation complete; browser verification in progress
 
 ## Phases
 
@@ -56,6 +56,16 @@ Phase 7: Ted grounding and family confrontation — complete
 - [x] Add Mr Lee’s refusal and concern about industry sexualization, Ted’s reassurance, and Mrs Lee’s support
 - [x] Verify the updated home scene and dialogue in the browser
 - **Status:** complete
+
+### Phase 8: Walk from school to Lee’s Cafe
+- [x] Reuse the existing street, crossings, park paths and cafe; add only connecting walkway pieces
+- [x] Keep both characters’ world positions unchanged when switching from the school view to the street view
+- [x] Add walk/turn/run following with spacing control and a two-character follow camera
+- [x] Add the two once-only optional conversation stops
+- [x] Show the cafe route, player marker and cafe goal on the minimap; gate F entry on both characters reaching the entrance
+- [x] Browser-check the Ted route handoff, street crossing, camera framing, companion follow and first conversation
+- [ ] Verify the second conversation and cafe-entry prompt in the browser
+- **Status:** implementation complete; final browser checks in progress
 
 ## Decisions Made (continued)
 | Decision | Rationale |

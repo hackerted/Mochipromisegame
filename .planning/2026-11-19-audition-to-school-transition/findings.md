@@ -54,5 +54,14 @@
 | Issue | Resolution |
 |-------|------------|
 
+## Cafe Journey Findings
+- The school actors already have stable world coordinates near the south crossing. The transition reparents those same roots into the existing park scene without changing their coordinates.
+- Keep the school building in the school scene; carrying it into the street scene can block the follow camera as the pair leave.
+- The main scene already has both road crossings, the perimeter sidewalks, the park gate/loop paths, and a single `cafeRoot`. Only the school connector and short cafe-entrance path are new.
+- The cafe goal is at `(-5, 32.2)`, in front of the existing cafe’s south-facing entrance. F starts the existing family-home story only after both roots are within 1.7 m.
+- The first optional stop is on the south park path at `(0, -16)`; the second is near the west side of the loop at `(-8, 3)`. Each is marked complete when started and cannot repeat.
+- The first browser pass showed an over-wide gap after turns. The player now pauses only when input would increase separation beyond 2.2 m, while the follower targets a small side-and-back offset and uses the existing turn/walk/run clips.
+- The minimap draws the player, the remaining route, and a `C` destination marker using the same world coordinates as the scene.
+
 ## Resources
 -

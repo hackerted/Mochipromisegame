@@ -86,6 +86,20 @@ export function drawMinimap(canvas, state) {
     ctx.fillText(home.label, px(home.x), py(home.z) - 8);
   }
 
+  if (state.goal) {
+    ctx.fillStyle = '#f2bf70';
+    ctx.strokeStyle = '#fff3d5';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px(state.goal.x), py(state.goal.z), 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#243246';
+    ctx.font = '700 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(state.goal.label, px(state.goal.x), py(state.goal.z) + 3);
+  }
+
   ctx.save();
   ctx.translate(px(state.player.x), py(state.player.z));
   ctx.rotate(state.player.yaw || 0);
