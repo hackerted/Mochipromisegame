@@ -1277,7 +1277,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     Ted: { x: -18, z: 33.8, label: 'Ted’s home', marker: 'T' },
     SooAh: { x: 18, z: 33.8, label: 'Soo-ah’s home', marker: 'S' },
   };
-  const journey = { active: false, phase: 'none', destination: null, friend: null, departureElapsed: 0 };
+  const journey = { active: false, phase: 'none', destination: null };
   const auditionRoots = { SooAh: null, Ted: null };
   const auditionMixers = { SooAh: null, Ted: null };
   const auditionActions = { SooAh: null, Ted: null };
@@ -2232,8 +2232,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     journey.active = true;
     journey.phase = 'to-home';
     journey.destination = destination;
-    journey.friend = name === 'Ted' ? 'SooAh' : 'Ted';
-    journey.departureElapsed = 0;
     parkLimit = 42;
     mrLeePatrolling = false;
     if (sittingCharacters.has(name) && canStandSelected()) standSelected();
@@ -2295,7 +2293,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (journey.phase === 'at-home') {
         journey.active = false;
         journey.phase = 'none';
-        journey.friend = null;
         parkLimit = parkHalf - 0.9;
         return startAudition();
       }
