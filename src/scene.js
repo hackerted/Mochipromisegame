@@ -1306,6 +1306,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     autoSection: 0,
     walking: false,
     figureTransition: null,
+    tedExit: null,
+    cameraFocus: null,
     message: '',
   };
   const auditionStageTop = 0.38;
@@ -1956,6 +1958,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function beginSooAhHappy() {
+    sendTedOffStage();
     setAuditionPhase('sooah-happy', 'SooAh', 'SooAhAuditionHappy', {
       speed: 3.1,
       message: 'Soo-ah smiles and finds her courage.',
@@ -1981,6 +1984,35 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     ['SooAhVictory', 2.7],
   ];
 
+  function sendTedOffStage() {
+    const root = auditionRoots.Ted;
+    if (!root?.visible || audition.tedExit) return;
+    const targetX = -7.4;
+    const targetYaw = -Math.PI / 2;
+    const turnDuration = 0.3;
+    const walkDuration = Math.abs(targetX - root.position.x) / 2.7;
+    playAuditionClip('Ted', 'TedAuditionWalk', { loop: true, speed: 1.25, fade: 0.12 });
+    audition.tedExit = {
+      startX: root.position.x,
+      startYaw: root.rotation.y,
+      targetX,
+      targetYaw,
+      z: root.position.z,
+      turnDuration,
+      walkDuration,
+      elapsed: 0,
+      duration: turnDuration + walkDuration,
+    };
+  }
+
+  function focusSooAhPerformance() {
+    const root = auditionRoots.SooAh;
+    audition.cameraFocus = {
+      x: root.position.x,
+      z: root.position.z + (camera.aspect < 1 ? 5.3 : 4.7),
+    };
+  }
+
   function startSooAhAutoSection(index) {
     if (index >= sooAhDanceSections.length) {
       audition.phase = 'complete';
@@ -1997,6 +2029,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function startSooAhAutoPerformance() {
+    focusSooAhPerformance();
     startSooAhAutoSection(0);
   }
 
@@ -2033,6 +2066,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function startSooAhQte() {
+    focusSooAhPerformance();
     audition.phase = 'sooah-qte';
     audition.elapsed = 0;
     audition.cueIndex = 0;
@@ -2091,6 +2125,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       tedAuditionFigure.position.set(-1.6, auditionStageTop, 2.3);
       tedAuditionFigure.rotation.set(0, 0, 0);
       audition.figureTransition = null;
+      audition.tedExit = null;
+      audition.cameraFocus = null;
       followCamera.mode = 'free';
       followCamera.angle = 0;
       followCamera.targetAngle = 0;
@@ -2177,6 +2213,31 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function updateAudition(dt) {
     if (!audition.active) return;
+    if (audition.tedExit) {
+      const exit = audition.tedExit;
+      exit.elapsed = Math.min(exit.duration, exit.elapsed + dt);
+      const root = auditionRoots.Ted;
+      const turn = Math.min(1, exit.elapsed / exit.turnDuration);
+      root.rotation.y = exit.startYaw + wrapAngle(exit.targetYaw - exit.startYaw) * turn;
+      if (exit.elapsed > exit.turnDuration) {
+        const walk = Math.min(1, (exit.elapsed - exit.turnDuration) / exit.walkDuration);
+        root.position.x = exit.startX + (exit.targetX - exit.startX) * walk;
+        root.position.z = exit.z;
+      }
+      if (exit.elapsed >= exit.duration) {
+        root.visible = false;
+        auditionMixers.Ted.stopAllAction();
+        auditionActions.Ted = null;
+        auditionCurrentClip.Ted = null;
+        tedAuditionFigure.visible = false;
+        audition.tedExit = null;
+      }
+    }
+    if (audition.cameraFocus) {
+      const blend = 1 - Math.exp(-dt * 3.5);
+      player.x += (audition.cameraFocus.x - player.x) * blend;
+      player.z += (audition.cameraFocus.z - player.z) * blend;
+    }
     if (audition.figureTransition) {
       const transition = audition.figureTransition;
       transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
