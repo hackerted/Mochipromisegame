@@ -4,10 +4,10 @@
 After a successful NOVA audition, show the judges accepting Soo-ah, let Ted and Soo-ah celebrate, then transition both playable routes into the existing school setting for a shared conversation about telling Mr. and Mrs. Lee.
 
 ## Next Step
-Leave the verified feature branch available for review; main remains untouched.
+Commit the verified feature branch for review; leave `main` untouched.
 
 ## Current Phase
-Phase 5: Delivery
+Phase 6: Judge and family-home integration — complete
 
 ## Phases
 
@@ -39,6 +39,22 @@ Phase 5: Delivery
 - [x] Review the final diff and license attribution
 - [x] Commit and push only the verified feature-branch changes
 - **Status:** complete
+
+### Phase 6: Judge and family-home integration
+- [x] Inventory the user’s three NOVA judge folders and Mrs. Lee assets
+- [x] Add each judge’s seated FBX actor and visible per-judge scoring to the audition stage
+- [x] After the existing school conversation, put Mrs. Lee and Mr. Lee at home and let Ted/Soo-ah visit
+- [x] Keep the existing retry path and selected playable character intact
+- [x] Apply source 4K texture atlases to the FBX actors and correct the home framing/poses
+- [x] Review the browser flow before considering the branch ready
+- **Status:** complete
+
+## Decisions Made (continued)
+| Decision | Rationale |
+|----------|-----------|
+| Keep the existing audition-success → next-school-day conversation, then transition to the Lee home when the player finishes that conversation. | Preserves the school chapter already requested while making the parents’ visit success-gated. |
+| Use the three per-judge `Sitting Idle.fbx` assets and the supportive Mrs Lee `Happy Hand Gesture.fbx`; reuse Mr Lee’s in-game model and the existing Korean house. | Gives the stage seated judges and a supportive mother while avoiding a rebuilt environment. |
+| Show live scorecards based on Soo-ah’s existing eight-cue score and retain the existing 5/8 pass threshold/retry. | Makes the judges visibly evaluate the same performance result the game already measures. |
 
 ## Decisions Made
 | Decision | Rationale |

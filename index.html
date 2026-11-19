@@ -22,6 +22,12 @@
     #hint { padding: 8px 12px; font-size: 12px; color: #fffaf1c9; background: #25332e75; border-radius: 999px; }
     #toast { position: absolute; left: 50%; bottom: 105px; transform: translate(-50%, 10px); max-width: min(600px, calc(100vw - 36px)); padding: 13px 18px; border-radius: 14px; background: #fff9edee; color: #3c4238; text-shadow: none; line-height: 1.45; text-align: center; opacity: 0; transition: .2s ease; }
     #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+    .judge-scores { position: absolute; right: 18px; top: 18px; width: 238px; padding: 14px 16px; border: 1px solid #ffffff42; border-radius: 16px; background: #25332edb; backdrop-filter: blur(12px); box-shadow: 0 12px 35px #17201926; text-shadow: none; }
+    .judge-scores[hidden] { display: none; }
+    .judge-scores .brand { margin-bottom: 10px; }
+    .judge-score-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; color: #fffaf1e8; font-size: 13px; border-top: 1px solid #ffffff20; }
+    .judge-score-row strong { color: #f2c4ce; font-variant-numeric: tabular-nums; }
+    #judgeVerdict { margin-top: 10px; font-size: 11px; letter-spacing: .12em; color: #f2c4ce; text-transform: uppercase; }
     #crosshair { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: #fff9eddd; box-shadow: 0 0 0 1px #34413666; }
     #startScreen { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: 20px; background: linear-gradient(110deg, #27362dba, #343b38a1), url('') center / cover; color: #fffaf1; transition: opacity .35s ease; }
     #startScreen.hidden { opacity: 0; pointer-events: none; }
@@ -38,7 +44,7 @@
     button:hover { background: #f3c7d0; transform: translateY(-1px); }
     #loading { margin-top: 12px; min-height: 17px; font-size: 12px; color: #f5e8dbad; }
     #error { display: none; margin-top: 12px; color: #ffd0cf; font-size: 13px; line-height: 1.45; }
-    @media (max-width: 560px) { .topbar { left: 12px; top: 12px; } #task { max-width: calc(100vw - 106px); font-size: 13px; } .minimap { left: 12px; top: 92px; width: 138px; height: 138px; } .bottom { bottom: 15px; } }
+    @media (max-width: 560px) { .topbar { left: 12px; top: 12px; } #task { max-width: calc(100vw - 106px); font-size: 13px; } .minimap { left: 12px; top: 92px; width: 138px; height: 138px; } .judge-scores { top: 80px; right: 12px; width: 190px; } .bottom { bottom: 15px; } }
   </style>
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/"}}
@@ -64,13 +70,20 @@
       <div class="card"><div class="brand">A Mochi Promise</div><div id="task">E stands and Q sits at the bench.</div></div>
     </div>
     <canvas id="minimap" class="minimap" width="220" height="220" aria-label="Map showing your position and home destination"></canvas>
+    <aside id="judgeScores" class="judge-scores" hidden aria-live="polite" aria-label="NOVA judges' scores">
+      <div class="brand">NOVA · Judge Scores</div>
+      <div class="judge-score-row"><span>Gen-1 Idol</span><strong>—</strong></div>
+      <div class="judge-score-row"><span>Age 22 Judge</span><strong>—</strong></div>
+      <div class="judge-score-row"><span>Senior Judge</span><strong>—</strong></div>
+      <div id="judgeVerdict">Scoring</div>
+    </aside>
     <div id="crosshair"></div>
     <div class="bottom"><div id="prompt"></div><div id="hint">Arrows move · Shift + arrows run · E stand · Q sit · F talk / mochi · 1–4 camera views · W/S zoom · A/D circle</div></div>
     <div id="toast"></div>
   </main>
   <script type="module">
     import * as THREE from 'three';
-    import { createScene } from './src/scene.js?v=311';
+    import { createScene } from './src/scene.js?v=316';
     import { drawMinimap } from './src/minimap.js';
 
     const canvas = document.querySelector('#game');
@@ -84,6 +97,9 @@
     const defaultHint = hint.textContent;
     const minimap = document.querySelector('#minimap');
     const toast = document.querySelector('#toast');
+    const judgeScores = document.querySelector('#judgeScores');
+    const judgeScoreRows = [...judgeScores.querySelectorAll('.judge-score-row strong')];
+    const judgeVerdict = document.querySelector('#judgeVerdict');
     const playSooAh = document.querySelector('#playSooAh');
     const playTed = document.querySelector('#playTed');
     const debugMode = new URLSearchParams(location.search).has('debug');
@@ -126,6 +142,13 @@
       task.textContent = state.task;
       prompt.textContent = state.prompt;
       hint.textContent = state.hint || defaultHint;
+      judgeScores.hidden = !state.judgeScores;
+      if (state.judgeScores) {
+        state.judgeScores.rows.forEach((judge, index) => {
+          judgeScoreRows[index].textContent = judge.score === null ? '—' : `${judge.score}/10`;
+        });
+        judgeVerdict.textContent = state.judgeScores.verdict;
+      }
       drawMinimap(minimap, game.mapState());
       prompt.classList.toggle('visible', Boolean(state.prompt));
       if (state.message !== lastMessage) {

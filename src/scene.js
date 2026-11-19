@@ -236,6 +236,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const schoolSun = new T.DirectionalLight('#fff1db', 2.2);
   schoolSun.position.set(-5, 10, 8);
   schoolScene.add(schoolSun);
+  const familyScene = new T.Scene();
+  familyScene.background = new T.Color('#d9e9f2');
+  familyScene.fog = new T.Fog('#d9e9f2', 55, 180);
+  familyScene.add(new T.HemisphereLight('#fff7e8', '#716b60', 2));
+  const familySun = new T.DirectionalLight('#fff1db', 2.2);
+  familySun.position.set(-5, 10, 8);
+  familyScene.add(familySun);
   const { root: auditionStage, figure: tedAuditionFigure } = buildAuditionStage(T);
   auditionStage.position.set(0, 0, 0);
   auditionStage.visible = false;
@@ -353,6 +360,31 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   schoolBuilding.position.set(-schoolCenter.x * schoolScale, -schoolBounds.min.y * schoolScale, -10 - schoolCenter.z * schoolScale);
   setShadows(schoolBuilding);
   schoolScene.add(schoolBuilding);
+  const familyGround = new T.Mesh(new T.PlaneGeometry(28, 28), new T.MeshStandardMaterial({ color: '#91a16f', roughness: 1 }));
+  familyGround.name = 'LeeHomeGarden';
+  familyGround.rotation.x = -Math.PI / 2;
+  familyGround.position.y = -0.02;
+  familyGround.receiveShadow = true;
+  familyScene.add(familyGround);
+  const familyPath = new T.Mesh(new T.PlaneGeometry(5.5, 10), new T.MeshStandardMaterial({ color: '#b7b2a4', roughness: 0.95 }));
+  familyPath.name = 'LeeHomePath';
+  familyPath.rotation.x = -Math.PI / 2;
+  familyPath.position.set(0, -0.006, 2.4);
+  familyPath.receiveShadow = true;
+  familyScene.add(familyPath);
+  const familyHouse = houseAsset.scene.clone(true);
+  familyHouse.name = 'LeeFamilyKoreanHouse';
+  const familyHouseBounds = new T.Box3().setFromObject(familyHouse);
+  const familyHouseCenter = familyHouseBounds.getCenter(new T.Vector3());
+  const familyHouseScale = 1.4;
+  familyHouse.scale.setScalar(familyHouseScale);
+  familyHouse.position.set(
+    -familyHouseCenter.x * familyHouseScale,
+    -familyHouseBounds.min.y * familyHouseScale,
+    -3.8 - familyHouseCenter.z * familyHouseScale,
+  );
+  setShadows(familyHouse);
+  familyScene.add(familyHouse);
   const clips = {};
   const clipLoads = {};
   const animationFiles = {
@@ -1094,7 +1126,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const terrifiedClips = { SooAh: null, Ted: null };
   const sitToStandClips = { SooAh: null, Ted: null };
   const standToSitClips = { SooAh: null, Ted: null };
-  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null };
+  const mrLeeClips = { idle: inPlaceStandTransition(mrLeeIdleClip), walk: null, talking: null };
   const setLoadedClip = (name, clip) => {
     clips[name] = clip;
     if (name === 'SooAhWalk') walkingClips.SooAh = inPlaceFbxWalk(clip);
@@ -1128,6 +1160,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (name === 'MrLeeWalk') {
       mrLeeClips.walk = inPlaceStandTransition(clip);
     }
+    if (name === 'MrLeeTalking') mrLeeClips.talking = inPlaceStandTransition(clip);
     return clip;
   };
   const ensureClip = (name) => {
@@ -1149,14 +1182,25 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     'SooAhAuditionTerrified', 'SooAhAuditionHappy', 'SooAhHipHop', 'SooAhJazz',
     'SooAhStepHipHop', 'SooAhAuditionSinging', 'SooAhAuditionWalk', 'SooAhAuditionIdle', 'SooAhVictory',
   ];
+  const auditionJudgeSources = [
+    { title: 'Gen-1 Idol', file: './assets/characters/audition/judges/nova-judge-gen1-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-gen1-idol.png' },
+    { title: 'Age 22 Judge', file: './assets/characters/audition/judges/nova-judge-22-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-age22.png' },
+    { title: 'Senior Judge', file: './assets/characters/audition/judges/nova-judge-senior-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-senior.png' },
+  ];
   async function loadAuditionAssets() {
     if (auditionLoadPromise) return auditionLoadPromise;
     auditionLoadPromise = (async () => {
-      const [tedAsset, sooAhAsset] = await Promise.all([
-        gltf(gltfLoader, './assets/characters/audition/ted-kpop-stage.glb'),
-        gltf(gltfLoader, './assets/characters/audition/soo-ah-kpop-stage.glb'),
-        ...auditionClipNames.map(ensureClip),
+      const clipsReady = Promise.all(auditionClipNames.map(ensureClip));
+      const [performers, judgeAssets, judgeTextures] = await Promise.all([
+        Promise.all([
+          gltf(gltfLoader, './assets/characters/audition/ted-kpop-stage.glb'),
+          gltf(gltfLoader, './assets/characters/audition/soo-ah-kpop-stage.glb'),
+        ]),
+        Promise.all(auditionJudgeSources.map(({ file }) => fbxLoader.loadAsync(file))),
+        Promise.all(auditionJudgeSources.map(({ texture }) => textureLoader.loadAsync(texture))),
+        clipsReady,
       ]);
+      const [tedAsset, sooAhAsset] = performers;
       const roots = { Ted: tedAsset.scene, SooAh: sooAhAsset.scene };
       for (const [name, root] of Object.entries(roots)) {
         fitToHeight(root, 1.52);
@@ -1167,6 +1211,33 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         auditionRoots[name] = root;
         auditionMixers[name] = new T.AnimationMixer(root);
         mixers.push(auditionMixers[name]);
+      }
+      const judgeXs = camera.aspect < 0.8 ? [-1.1, 0, 1.1] : [-3.2, 0, 3.2];
+      if (camera.aspect < 0.8) {
+        for (let index = 0; index < judgeXs.length; index++) {
+          auditionStage.getObjectByName(`Audition_JudgeChairSeat_${index + 1}`).position.x = judgeXs[index];
+          auditionStage.getObjectByName(`Audition_JudgeChairBack_${index + 1}`).position.x = judgeXs[index];
+        }
+        auditionStage.getObjectByName('Audition_JudgeDeskTop').scale.x = 0.58;
+        auditionStage.getObjectByName('Audition_JudgeDeskFront').scale.x = 0.58;
+      }
+      for (const [index, asset] of judgeAssets.entries()) {
+        const source = auditionJudgeSources[index];
+        const clip = asset.animations?.[0];
+        if (!clip) throw new Error(`No seated animation in ${source.file}`);
+        applyCharacterTexture(asset, judgeTextures[index], maxAnisotropy);
+        fitToHeight(asset, 1.48);
+        asset.name = `NOVAJudge_${source.title.replaceAll(' ', '')}`;
+        asset.visible = false;
+        asset.position.set(judgeXs[index], 0, 8.55);
+        asset.rotation.y = Math.PI;
+        setShadows(asset);
+        auditionScene.add(asset);
+        const mixer = new T.AnimationMixer(asset);
+        const action = mixer.clipAction(clip);
+        action.setLoop(T.LoopRepeat, Infinity).play();
+        mixers.push(mixer);
+        auditionJudges.push({ root: asset, title: source.title });
       }
       for (const name of auditionClipNames) auditionClips[name] = inPlaceFbxWalk(clips[name]);
       characterRoots.Ted = auditionRoots.Ted;
@@ -1314,6 +1385,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   };
   const journey = { active: false, phase: 'none', destination: null };
   const school = { active: false, phase: 'inactive', dialogueIndex: 0, auditionPassed: false, arrived: 0 };
+  const family = { active: false, pending: false, phase: 'inactive', dialogueIndex: 0 };
+  let familyAssetsPromise = null;
+  let mrsLeeRoot = null;
+  let mrsLeeGestureAction = null;
   const schoolDialogue = {
     Ted: [
       'The next school day, Ted and Soo-ah meet at the school entrance.',
@@ -1335,7 +1410,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       'Soo-ah: After class, let’s go tell them together.',
     ],
   };
+  const familyDialogue = [
+    'Soo-ah: Mum, Dad… I passed the NOVA audition. They chose me.',
+    'Mrs. Lee: Oh, sweetheart, I’m so proud of you. You worked hard for this.',
+    'Mr. Lee: I’m proud you did well. But trainee school will take time, and your exams still matter.',
+    'Soo-ah: I want to keep studying. Could we look at the training schedule together?',
+    'Ted: I’ll help her make a plan for practice and homework.',
+    'Mrs. Lee: Let’s hear the plan before we decide anything.',
+    'Mr. Lee: All right. I’m not promising yet, but I’ll listen.',
+  ];
   const auditionRoots = { SooAh: null, Ted: null };
+  const auditionJudges = [];
   const auditionMixers = { SooAh: null, Ted: null };
   const auditionActions = { SooAh: null, Ted: null };
   const auditionCurrentClip = { SooAh: null, Ted: null };
@@ -1721,7 +1806,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       followTarget.y + Math.sin(followCamera.pitch) * followCamera.distance,
       followTarget.z + Math.cos(followCamera.angle) * horizontal,
     );
-    camera.position.y = Math.max(camera.position.y, (school.active ? 0 : parkHeightAt(camera.position.x, camera.position.z)) + 0.3);
+    camera.position.y = Math.max(camera.position.y, (school.active || family.active ? 0 : parkHeightAt(camera.position.x, camera.position.z)) + 0.3);
     camera.lookAt(followTarget);
     // Arrow keys walk relative to player.yaw, so keep it pointing where the camera looks.
     player.x = camera.position.x;
@@ -1857,6 +1942,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function walkSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
     if (audition.pending) return false;
     if (audition.active) return walkAuditionSelected({ directionX, directionZ, dt, run });
+    if (family.active || family.pending) return false;
     if (school.active && school.phase === 'conversation') return false;
     if (journey.active && journey.phase === 'at-home') return false;
     const name = selectedCharacter;
@@ -2072,15 +2158,27 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     };
   }
 
+  function getJudgeScoreCards() {
+    if (audition.score === 0 && !['retry', 'judges-reaction', 'judges-accepted', 'celebration'].includes(audition.phase)) {
+      return auditionJudgeSources.map(({ title }) => ({ name: title, score: null }));
+    }
+    const base = 2 + clamp(audition.score, 0, 8);
+    return [
+      { name: 'Gen-1 Idol', score: clamp(base + 1, 1, 10) },
+      { name: 'Age 22 Judge', score: clamp(base, 1, 10) },
+      { name: 'Senior Judge', score: clamp(base - 1, 1, 10) },
+    ];
+  }
+
   function beginJudgesReaction() {
     audition.passed = true;
     school.auditionPassed = true;
     audition.phase = 'judges-reaction';
     audition.elapsed = 0;
-    audition.phaseDuration = 2.0;
-    audition.cameraFocus = { x: 0, z: 7.0 };
+    audition.phaseDuration = 3.2;
+    audition.cameraFocus = { x: 0, z: 14.5 };
     playAuditionClip('SooAh', 'SooAhVictory', { loop: true, speed: 1.1 });
-    message = 'The judges smile and rise to applaud.';
+    message = 'The three NOVA judges compare their scorecards.';
   }
 
   function beginJudgeAcceptance() {
@@ -2095,9 +2193,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     audition.phase = 'judges-accepted';
     audition.elapsed = 0;
     audition.phaseDuration = 0;
-    audition.cameraFocus = { x: (targetX + sooAhActor.position.x) / 2, z: sooAhActor.position.z + 7.2 };
+    audition.cameraFocus = { x: (targetX + sooAhActor.position.x) / 2, z: 14.5 };
     playAuditionClip('Ted', 'TedAuditionWalk', { loop: true, speed: 1.25, fade: 0.12 });
-    message = 'Judge: Soo-ah, you’re in! You’ve been selected for the NOVA trainee program.';
+    const scores = getJudgeScoreCards().map(({ score }) => `${score}/10`).join(' · ');
+    message = `The judges score Soo-ah ${scores}. “You’re in!” She’s been selected for NOVA.`;
   }
 
   function beginAuditionCelebration() {
@@ -2212,6 +2311,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       audition.active = true;
       audition.run++;
       auditionStage.visible = true;
+      for (const judge of auditionJudges) judge.root.visible = true;
       parkCharacterRoots.Ted.visible = false;
       parkCharacterRoots.SooAh.visible = false;
       mrLeeRoot.visible = false;
@@ -2551,7 +2651,122 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (school.dialogueIndex >= lines.length) school.phase = 'ready-to-tell';
       return true;
     }
-    message = 'After class, Ted will go with Soo-ah to tell Mr. and Mrs. Lee.';
+    return startFamilyVisit();
+  }
+
+  function loadFamilyAssets() {
+    if (mrsLeeRoot) return Promise.resolve();
+    if (!familyAssetsPromise) {
+      familyAssetsPromise = Promise.all([
+        fbxLoader.loadAsync('./assets/characters/mrs-lee-happy-gesture.fbx'),
+        ensureClip('MrLeeTalking'),
+        textureLoader.loadAsync('./assets/textures/family/mrs-lee.png'),
+      ]).then(([asset, , texture]) => {
+        const clip = asset.animations?.[0];
+        if (!clip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
+        mrsLeeRoot = asset;
+        applyCharacterTexture(mrsLeeRoot, texture, maxAnisotropy);
+        fitToHeight(mrsLeeRoot, 1.48);
+        mrsLeeRoot.name = 'MrsLeeHome';
+        mrsLeeRoot.visible = false;
+        setShadows(mrsLeeRoot);
+        familyScene.add(mrsLeeRoot);
+        const mixer = new T.AnimationMixer(mrsLeeRoot);
+        mrsLeeGestureAction = mixer.clipAction(clip);
+        mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
+        mrsLeeGestureAction.clampWhenFinished = true;
+        mixers.push(mixer);
+      }).catch((error) => {
+        familyAssetsPromise = null;
+        throw error;
+      });
+    }
+    return familyAssetsPromise;
+  }
+
+  function startFamilyVisit() {
+    if (!school.auditionPassed || family.active) return family.active;
+    if (family.pending) return true;
+    family.pending = true;
+    family.phase = 'loading';
+    message = 'After school, Ted and Soo-ah go to the Lee family home.';
+    loadFamilyAssets().then(() => {
+      family.pending = false;
+      family.active = true;
+      family.phase = 'conversation';
+      family.dialogueIndex = 0;
+      school.active = false;
+      school.phase = 'complete';
+      mrLeePatrolling = false;
+      mrLeeAware = false;
+
+      familyScene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh, mrLeeRoot, mrsLeeRoot);
+      const arrivals = {
+        Ted: { x: -0.42, z: 2.6 },
+        SooAh: { x: 0.42, z: 2.6 },
+      };
+      for (const name of ['Ted', 'SooAh']) {
+        const root = parkCharacterRoots[name];
+        characterRoots[name] = root;
+        root.visible = true;
+        root.position.set(arrivals[name].x, 0, arrivals[name].z);
+        root.rotation.y = Math.PI;
+        sittingCharacters.delete(name);
+        sittingDown.delete(name);
+        walkingCharacters.delete(name);
+        turningCharacters.delete(name);
+        standingCharacters.add(name);
+        standingReady.add(name);
+        characterMode[name] = 'standingIdle';
+        delete movementModes[name];
+        delete turnStates[name];
+        characterMixers[name].stopAllAction();
+        characterMixers[name].update(0);
+        restoreStandingPose(name);
+      }
+
+      mrLeeRoot.visible = true;
+      mrLeeRoot.position.set(-1.05, 0, 0.55);
+      mrLeeRoot.rotation.y = 0;
+      mrsLeeRoot.visible = true;
+      mrsLeeRoot.position.set(1.05, 0, 0.55);
+      mrsLeeRoot.rotation.y = 0;
+      mrLeeMixer.stopAllAction();
+      mrLeeMixer.update(0);
+      mrLeeAction = null;
+      setMrLeeMode('idle');
+      if (mrsLeeGestureAction) {
+        mrsLeeGestureAction.reset();
+        mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
+        mrsLeeGestureAction.clampWhenFinished = true;
+        mrsLeeGestureAction.play();
+      }
+
+      followCamera.mode = 'free';
+      player.x = 0;
+      player.z = 8.5;
+      player.yaw = 0;
+      player.pitch = -0.08;
+      message = 'At Lee’s home. Press F to tell Mr. and Mrs. Lee about NOVA.';
+    }).catch((error) => {
+      family.pending = false;
+      family.phase = 'ready-to-tell';
+      message = 'The Lee family home could not load. Press F to try again.';
+      console.error(error);
+    });
+    return true;
+  }
+
+  function advanceFamilyDialogue() {
+    if (!family.active) return false;
+    if (family.phase === 'complete') {
+      message = 'Soo-ah has shared her NOVA news with Mr. and Mrs. Lee.';
+      return true;
+    }
+    message = familyDialogue[family.dialogueIndex++];
+    if (message.startsWith('Mr. Lee:')) setMrLeeMode('talking');
+    else setMrLeeMode('idle');
+    if (family.dialogueIndex >= familyDialogue.length) family.phase = 'complete';
     return true;
   }
 
@@ -2581,6 +2796,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function interact() {
     if (audition.pending) return true;
+    if (family.pending) return true;
+    if (family.active) return advanceFamilyDialogue();
     if (school.active) return advanceSchoolDialogue();
     if (audition.active) {
       if (audition.phase === 'retry') {
@@ -2924,13 +3141,28 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function hud() {
+    if (family.pending) {
+      return { task: 'After school · Lee family home', prompt: 'Loading the family home…', message, hint: 'Ted and Soo-ah are going to tell Mr. and Mrs. Lee.' };
+    }
+    if (family.active) {
+      return {
+        task: family.phase === 'complete' ? 'Soo-ah has shared her NOVA news' : 'At Lee family home · tell the parents',
+        prompt: family.phase === 'complete' ? '' : 'F · Continue conversation',
+        message,
+        hint: family.phase === 'complete' ? 'Mr. and Mrs. Lee know that Soo-ah passed the audition.' : 'Mr. Lee is cautious; Mrs. Lee is supporting Soo-ah.',
+        selectedCharacter,
+        standing: true,
+        walkingReady: false,
+      };
+    }
     if (school.active) {
       const task = school.phase === 'arrival' ? 'Next school day · Seoul school entrance'
         : school.phase === 'conversation' ? 'Ted and Soo-ah discuss telling Mr. and Mrs. Lee'
           : 'After class · tell Mr. and Mrs. Lee together';
       return {
         task,
-        prompt: school.phase === 'conversation' ? 'F · Continue conversation' : '',
+        prompt: school.phase === 'conversation' ? 'F · Continue conversation'
+          : school.phase === 'ready-to-tell' ? 'F · Go to Lee’s home' : '',
         message,
         hint: school.phase === 'conversation'
           ? 'Ted and Soo-ah are together at school. Mr. Lee does not know about the audition yet.'
@@ -2964,7 +3196,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         'sooah-qte': `Soo-ah’s performance · ${audition.score} on beat`,
         'sooah-finale': 'Soo-ah finishes her audition',
         retry: 'Soo-ah gets another audition try',
-        'judges-reaction': 'The NOVA judges applaud',
+        'judges-reaction': 'The NOVA judges score Soo-ah’s performance',
         'judges-accepted': 'Soo-ah has been selected for NOVA',
         celebration: 'Ted and Soo-ah celebrate together',
       };
@@ -2977,7 +3209,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         ? 'Arrow keys walk Ted · F starts his song at the stage mark'
         : audition.phase === 'sooah-enter' ? 'Soo-ah walks into the spotlight'
         : audition.phase === 'sooah-qte' ? 'Press the shown arrow on each beat · missed cues never stop the audition' : 'Performance controls are active';
-      return { task: tasks[audition.phase] ?? 'NOVA audition', prompt, message, hint, selectedCharacter, standing: false, walkingReady: false };
+      return {
+        task: tasks[audition.phase] ?? 'NOVA audition', prompt, message, hint, selectedCharacter,
+        standing: false, walkingReady: false,
+        judgeScores: {
+          rows: getJudgeScoreCards(),
+          verdict: ['judges-accepted', 'celebration'].includes(audition.phase) ? 'Selected for NOVA'
+            : audition.phase === 'retry' ? 'Try again' : audition.phase === 'judges-reaction' ? 'Final scores' : 'Live scoring',
+        },
+      };
     }
     if (auditionAccepted) {
       return { task: 'Ted and Soo-ah say goodnight at the bench.', prompt: 'F · Walk home', message, hint: 'Follow the map to your home.', selectedCharacter, standing: standingCharacters.has(selectedCharacter), walkingReady: standingReady.has(selectedCharacter) };
@@ -3619,5 +3859,5 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     },
   };
 
-  return { get scene() { return school.active ? schoolScene : audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
+  return { get scene() { return family.active ? familyScene : school.active ? schoolScene : audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
 }

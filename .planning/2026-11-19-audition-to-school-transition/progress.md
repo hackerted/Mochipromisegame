@@ -36,3 +36,16 @@
 | Local HTTP server could not bind before network permission | Requested turn-scoped network permission; reused the existing server and confirmed the school texture URL returned HTTP 200. |
 | One old browser log showed a failed school texture request before local access was granted | Reloaded after permission; school building rendered with textures in the browser. |
 | Blender scene-info query used unsupported field names on the first call | Retried with the accepted fields; confirmed no school set was in the live scene. |
+
+## Session: 2026-11-19 — Judge and family-home integration
+- Confirmed the Downloads asset folders contain NOVAjudgeage22, NOVAjudgeformerGen1idol, olderkpopjudge, and MrsLee, including judge idle/talking/positive-reaction clips.
+- Confirmed the current game already contains two judge FBX models and Mrs Lee FBX, but no judge actor setup in `scene.js`; the judge feedback is currently only dialogue/state text.
+- Created branch `feature/nova-judges-and-family-home`; existing `.DS_Store` changes are left untouched and unstaged.
+- **Current phase:** 6 — inspecting actor/model formats and extending the existing audition, school, and scene transitions.
+- Decided to keep the existing school chapter; after its conversation, a pass-only home visit will reuse the Korean house, Mr. Lee’s loaded model, and the new supportive Mrs Lee FBX.
+- The three judge `Sitting Idle.fbx` files are the appropriate runtime assets for a seated judging panel; their corresponding T-pose GLBs would not animate.
+- **Next step:** commit the verified feature branch for review; leave `main` untouched.
+- Extracted the 4K PNG atlases from the judge and Mrs Lee source GLBs and applied them to the skinned FBX runtime actors, avoiding the unsupported `fbm/` image references.
+- Corrected the family-home camera to show the house and all four characters, and reset Mr Lee’s patrol animation before the dialogue.
+- Browser verified the Ted route reaches NOVA, shows three live judge scores, preserves the school conversation, and opens the family home. The family screenshot shows both parents and children at the house; the full dialogue reaches its completion state.
+- Browser testing also confirmed that a low cue score stays on the audition retry path. The final portrait viewport shows the live scores and the home family clearly; the judge actors remain off-camera during the close performance shot and are staged for the separate score reveal.

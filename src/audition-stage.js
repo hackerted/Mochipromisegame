@@ -14,6 +14,8 @@ export function buildAuditionStage(THREE) {
   const trimMat = material('Stage_GoldTrim', '#d5a95f', 0.42, 0.25);
   const speakerMat = material('Stage_Speaker', '#202630', 0.65);
   const micMat = material('Stage_Microphone', '#4e5764', 0.38, 0.65);
+  const judgeDeskMat = material('JudgeDesk_Walnut', '#473a3d', 0.68);
+  const judgeChairMat = material('JudgeChair_DeepBlue', '#293c58', 0.78);
   const robotWhite = material('Ted_Figure_White', '#e6e9ee', 0.45);
   const robotBlue = material('Ted_Figure_Blue', '#3b6a9d', 0.42, 0.1);
   const robotRed = material('Ted_Figure_Red', '#c64f55', 0.42, 0.05);
@@ -66,6 +68,14 @@ export function buildAuditionStage(THREE) {
 
   for (const x of [-5.8, 5.8]) {
     box(`Audition_Speaker_${x < 0 ? 'L' : 'R'}`, [0.92, 1.65, 0.68], [x, 1.2, -1.2], speakerMat);
+  }
+
+  box('Audition_JudgeFloor', [14, 0.08, 6], [0, -0.04, 8.25], woodEdge);
+  box('Audition_JudgeDeskTop', [9.6, 0.14, 0.92], [0, 1.02, 7.45], judgeDeskMat);
+  box('Audition_JudgeDeskFront', [9.2, 0.82, 0.16], [0, 0.53, 7.0], judgeDeskMat);
+  for (const [index, x] of [-3.2, 0, 3.2].entries()) {
+    box(`Audition_JudgeChairSeat_${index + 1}`, [1.05, 0.12, 0.88], [x, 0.47, 8.55], judgeChairMat);
+    box(`Audition_JudgeChairBack_${index + 1}`, [1.05, 0.92, 0.14], [x, 0.94, 8.98], judgeChairMat);
   }
 
   const mic = new THREE.Group();
