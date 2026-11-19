@@ -1,6 +1,6 @@
 # A Mochi Promise — Game Plan
 
-**Status:** first playable approach slice in progress.  
+**Status:** first playable story slice now runs from the park through the school-day conversation after the audition.
 **Format:** short 3D story adventure with two playable perspectives and one shared outcome.
 
 ## Core premise
@@ -79,9 +79,9 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 
 **Built in this pass:** A rounded two-way road loop, sidewalks, lane dashes, four zebra crossings with paths connected to the outer sidewalk, two marked parking bays with parked Kia Forte cars, one slow Kia Forte on the loop, two hydrants, a cafe bus-stop sign and a street bin. The city bus and raised curb ramps remain future dressing.
 
-## Next level: Home to the NOVA audition
+## Next level: NOVA audition and return to school
 
-**Chapter goal:** Carry the promise from the park into the next morning, then let Soo-ah overcome her stage fright and perform. The audition is a story moment, not a pass/fail rhythm game. The playable slice now lets the selected character walk from the bench to a home waypoint before the NOVA stage; home interiors and evening scenes remain planned work.
+**Chapter goal:** Carry the promise from the park through the NOVA audition and into the next school day. The player can celebrate Soo-ah's selection and see her and Ted begin planning how to tell Mr. and Mrs. Lee. The earlier playable slice lets the selected character walk from the bench to a home waypoint before the NOVA stage; home interiors and evening scenes remain planned work.
 
 ### Story sequence
 
@@ -91,12 +91,14 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 4. **Soo-ah freezes:** At the audition, Soo-ah steps onto the stage, sees the judges and audience, and freezes. Give the player a brief moment to notice her fear before Ted helps.
 5. **Ted encourages her:** If Ted is selected, the player walks him onto the stage. If Soo-ah is selected, Ted enters as an NPC. Ted sings, performs the supplied Gangnam Style dance with his hands free, sets his figure on the stage edge, gives a thumbs-up, and says, “Over to you, chipmunk.” Soo-ah changes from terrified to happy, then walks from the stage wing to her mark.
 6. **Soo-ah performs:** If Soo-ah is selected, the player follows arrow cues through her singing, Hip Hop, Jazz, and Step Hip Hop clips. Each pressed arrow triggers a visible move. If Ted is selected, the same performance runs for Soo-ah as an NPC. Missed cues never block the ending.
+7. **Judges decide:** On Soo-ah's route, five or more correct cues out of eight earns selection; below that, the judges invite her to retry. On Ted's route, Soo-ah's automatic performance counts as a pass. The judges applaud and tell Soo-ah, “You’re in! You’ve been selected for the NOVA trainee program.”
+8. **Celebrate and return to school:** Ted comes back onto the stage to celebrate briefly with Soo-ah. After the celebration, the next school day begins at the existing school-building environment. Ted and Soo-ah discuss how nervous and excited Soo-ah feels about telling Mr. and Mrs. Lee. The parents do not learn the result in this scene.
 
 ### Dance and singing controls
 
 - Lock camera movement during the stage scene. In Ted’s route, arrows walk Ted to his mark. In Soo-ah’s route, arrows are reserved for the performance prompts; normal movement returns outside the audition.
 - The current QTE shows one randomized arrow at a time, with a three-second response window. Every arrow triggers an animation: Up uses Hip Hop, Down uses Singing, Left uses Jazz, and Right uses Step Hip Hop. A correct key raises her on-beat count; a wrong or missed key still advances without stopping the performance.
-- A miss briefly returns Soo-ah to standing idle before the next cue. The sequence has eight cues and always ends with her completing the audition.
+- A miss briefly returns Soo-ah to standing idle before the next cue. Five or more correct cues out of eight earns selection; below five, the judges offer another try instead of stopping the story permanently.
 - The current cues use a steady timer because no audition music file has been added yet. When music is supplied, align the cue interval to its tempo.
 
 ### Assets and audio to review
@@ -104,18 +106,19 @@ Build the street ring before the audition stage, keeping the 45.2 m playable par
 - **NOVA venue:** exterior entrance/sign, audition room, stage, curtains/backdrop, judges’ table and chairs, a modest audience, stage lights, speakers, and a microphone or stand.
 - **Characters:** The supplied `tedkpopaudtion` and `kpopaudtionsooah` FBXs provide Ted walking, singing, Gangnam Style, thumbs-up, and happy hand gestures; Soo-ah start-walking, terrified, happy, idle, singing, Hip Hop, Jazz, Step Hip Hop, and victory clips. The game uses rigged GLB models plus compact animation-only GLBs extracted from those FBXs. Singing currently means the supplied body animation; no audio or lip-sync clip is included yet.
 - **Story prop:** Ted’s Gundam figure, sized to read clearly in his hand and when placed on the stage edge. Keep it as a separate prop so the handoff/placement can be animated.
+- **School exterior:** Reuse `assets/school/school_building/scene.gltf` for the school entrance/courtyard. Keep its accompanying `scene.bin`, textures, and attribution; do not replace it with a newly built school.
 - **Music:** user-selected, usable audio file plus its tempo or beat times. Check whether it includes vocals/backing vocals and whether Soo-ah’s animation should match the full track or a short audition excerpt. Keep the music choice open until the assets are reviewed.
 - **Home scenes:** small, reusable bedroom or home-corner assets for the evening beats; detailed home exploration is out of this level’s scope.
 
 ### Build order and completion checks
 
-1. Define a single chapter transition using the existing `auditionAccepted` outcome so both Ted and Soo-ah routes enter the same next level.
-2. Block out the evening/morning transitions, meetup, NOVA entrance, backstage, stage, audience, and judges with temporary geometry. Confirm character scale, stage access, camera framing, and a clear path for Ted to enter and leave.
+1. Preserve the audition pass state and route both Ted and Soo-ah into the same judges, celebration, and school transition.
+2. Reuse the current NOVA stage and school-building GLTF. Confirm character scale, school entrance placement, camera framing, and a clear path for Ted to enter and leave the stage.
 3. Add the story beats and figure placement, with movement locked during each cutscene and every animation transition returning to a stable idle pose.
 4. After the user selects music and reviews the actual Mixamo clips, map prompts only to those clips and measured beat times. Add small Blender keys for missing story gestures. Keep the QTE handler scoped to this scene so it cannot trigger walking, dialogue, or camera controls.
-5. Verify both prior routes reach this level once; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed and remains on stage; the correct line plays once; all prompt outcomes reach the same completed-audition ending; normal controls return afterward.
+5. Verify both prior routes reach the school scene; Soo-ah freezes before Ted’s encouragement; the figure stays in his hand until placed; Ted exits before Soo-ah's dance and returns for the celebration; the judges' pass/retry result is correct; the school dialogue advances with F; normal movement and camera controls work there.
 
-**Scope boundary:** This level ends after Soo-ah completes the audition. The audition result, meeting NOVA staff, and any follow-up with Mr. Lee are later story decisions. Home interiors, the trip from home to NOVA, judges/audience, and music playback remain future work; the map-guided walk and stage sequence use the reviewed animation files.
+**Scope boundary:** This level ends after the school conversation sets up telling Mr. and Mrs. Lee. The actual parent conversation, permission to attend trainee school, and trainee-school life remain future story work. Home interiors, the trip from home to NOVA, physical judge/audience characters, and music playback also remain future work; the existing audition stage and school-building asset are reused.
 
 ## Decisions still open
 

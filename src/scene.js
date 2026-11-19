@@ -229,6 +229,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const auditionScene = new T.Scene();
   auditionScene.background = new T.Color('#111a2c');
   auditionScene.fog = new T.Fog('#111a2c', 35, 90);
+  const schoolScene = new T.Scene();
+  schoolScene.background = new T.Color('#d9e9f2');
+  schoolScene.fog = new T.Fog('#d9e9f2', 55, 180);
+  schoolScene.add(new T.HemisphereLight('#fff7e8', '#716b60', 2));
+  const schoolSun = new T.DirectionalLight('#fff1db', 2.2);
+  schoolSun.position.set(-5, 10, 8);
+  schoolScene.add(schoolSun);
   const { root: auditionStage, figure: tedAuditionFigure } = buildAuditionStage(T);
   auditionStage.position.set(0, 0, 0);
   auditionStage.visible = false;
@@ -302,7 +309,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   gltfLoader.setMeshoptDecoder(MeshoptDecoder);
   const fbxLoader = new FBXLoader(loaders.manager);
   const textureLoader = new T.TextureLoader(loaders.manager);
-  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, hydrantAsset, mochiAsset, mochiHeldAsset, mochiSkewerAsset, kiaCarAsset, mrLeeIdleClip, sooAhSittingClip] = await Promise.all([
+  const [chairAsset, mrLeeAsset, tedAsset, sooAh, mrLeeTexture, tedTexture, sooAhTexture, cafeAsset, cherryTreeAsset, houseAsset, apartmentAsset, gateAsset, sakuraAsset, hydrantAsset, mochiAsset, mochiHeldAsset, mochiSkewerAsset, kiaCarAsset, mrLeeIdleClip, sooAhSittingClip, schoolAsset] = await Promise.all([
     gltf(gltfLoader, './assets/park-chair-stage.glb'),
     gltf(gltfLoader, './assets/mr-lee-model.glb').then((asset) => asset.scene),
     gltf(gltfLoader, './assets/ted-stage-lite.glb'),
@@ -323,7 +330,29 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     gltf(gltfLoader, './assets/cars/kia_forte_hatchback_2022.glb'),
     loadJsonClip('./assets/clips/MrLeeIdle.json'),
     loadJsonClip('./assets/clips/SooAhSitting.json'),
+    gltf(gltfLoader, './assets/school/school_building/scene.gltf'),
   ]);
+  const schoolGround = new T.Mesh(new T.PlaneGeometry(70, 70), new T.MeshStandardMaterial({ color: '#81915e', roughness: 1 }));
+  schoolGround.name = 'SchoolGround';
+  schoolGround.rotation.x = -Math.PI / 2;
+  schoolGround.position.y = -0.035;
+  schoolGround.receiveShadow = true;
+  schoolScene.add(schoolGround);
+  const schoolCourtyard = new T.Mesh(new T.PlaneGeometry(38, 30), new T.MeshStandardMaterial({ color: '#aaa99f', roughness: 0.95 }));
+  schoolCourtyard.name = 'SchoolCourtyard';
+  schoolCourtyard.rotation.x = -Math.PI / 2;
+  schoolCourtyard.position.set(0, -0.02, 5);
+  schoolCourtyard.receiveShadow = true;
+  schoolScene.add(schoolCourtyard);
+  const schoolBuilding = schoolAsset.scene;
+  schoolBuilding.name = 'SeoulSchoolBuilding';
+  const schoolBounds = new T.Box3().setFromObject(schoolBuilding);
+  const schoolCenter = schoolBounds.getCenter(new T.Vector3());
+  const schoolScale = 8;
+  schoolBuilding.scale.setScalar(schoolScale);
+  schoolBuilding.position.set(-schoolCenter.x * schoolScale, -schoolBounds.min.y * schoolScale, -10 - schoolCenter.z * schoolScale);
+  setShadows(schoolBuilding);
+  schoolScene.add(schoolBuilding);
   const clips = {};
   const clipLoads = {};
   const animationFiles = {
@@ -1284,6 +1313,28 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     SooAh: { x: 18, z: 33.8, label: 'Soo-ah’s home', marker: 'S' },
   };
   const journey = { active: false, phase: 'none', destination: null };
+  const school = { active: false, phase: 'inactive', dialogueIndex: 0, auditionPassed: false, arrived: 0 };
+  const schoolDialogue = {
+    Ted: [
+      'The next school day, Ted and Soo-ah meet at the school entrance.',
+      'Soo-ah: The judges selected me. I should be happy, but I’m nervous about telling Mr. and Mrs. Lee.',
+      'Ted: I’m so happy for you. You earned this. We can talk to them together after school.',
+      'Soo-ah: Dad might say no. He wants me to focus on exams.',
+      'Ted: Then we’ll make a plan that shows you can train and keep up with your studies.',
+      'Soo-ah: I want to try, even if I’m scared.',
+      'Ted: I’ll be there with you. You can tell them what you want.',
+      'Soo-ah: Okay. We’ll talk to them after school.',
+    ],
+    SooAh: [
+      'The next school day, Ted and Soo-ah meet at the school entrance.',
+      'Soo-ah: I got in. I’m excited, but I keep thinking about telling Mr. and Mrs. Lee.',
+      'Soo-ah: What if Dad thinks I’m choosing training instead of school?',
+      'Ted: I’m so proud of you. We can show them the offer and schedule, and I’ll listen with you.',
+      'Soo-ah: I want to go to the trainee school. I just need them to understand why it matters to me.',
+      'Ted: You should tell them that yourself. I’ll be right beside you.',
+      'Soo-ah: After class, let’s go tell them together.',
+    ],
+  };
   const auditionRoots = { SooAh: null, Ted: null };
   const auditionMixers = { SooAh: null, Ted: null };
   const auditionActions = { SooAh: null, Ted: null };
@@ -1307,7 +1358,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     walking: false,
     figureTransition: null,
     tedExit: null,
+    tedReturn: null,
     cameraFocus: null,
+    passed: false,
     message: '',
   };
   const auditionStageTop = 0.38;
@@ -1411,7 +1464,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const groundSooAhDuringStand = () => {
     sooAh.updateMatrixWorld(true);
     for (const mesh of sooAhStandMeshes) mesh.skeleton.update();
-    sooAh.position.y += parkHeightAt(sooAh.position.x, sooAh.position.z) - sooAhStandBounds.setFromObject(sooAh, true).min.y;
+    const groundY = school.active ? 0 : parkHeightAt(sooAh.position.x, sooAh.position.z);
+    sooAh.position.y += groundY - sooAhStandBounds.setFromObject(sooAh, true).min.y;
     sooAh.updateMatrixWorld(true);
   };
   const tedStandBounds = new T.Box3();
@@ -1420,7 +1474,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const groundTedDuringStand = () => {
     tedRoot.updateMatrixWorld(true);
     for (const mesh of tedStandMeshes) mesh.skeleton.update();
-    tedRoot.position.y += parkHeightAt(tedRoot.position.x, tedRoot.position.z) - tedStandBounds.setFromObject(tedRoot, true).min.y;
+    const groundY = school.active ? 0 : parkHeightAt(tedRoot.position.x, tedRoot.position.z);
+    tedRoot.position.y += groundY - tedStandBounds.setFromObject(tedRoot, true).min.y;
     tedRoot.updateMatrixWorld(true);
   };
   const sittingDown = new Set();
@@ -1666,7 +1721,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       followTarget.y + Math.sin(followCamera.pitch) * followCamera.distance,
       followTarget.z + Math.cos(followCamera.angle) * horizontal,
     );
-    camera.position.y = Math.max(camera.position.y, parkHeightAt(camera.position.x, camera.position.z) + 0.3);
+    camera.position.y = Math.max(camera.position.y, (school.active ? 0 : parkHeightAt(camera.position.x, camera.position.z)) + 0.3);
     camera.lookAt(followTarget);
     // Arrow keys walk relative to player.yaw, so keep it pointing where the camera looks.
     player.x = camera.position.x;
@@ -1802,6 +1857,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   function walkSelected({ directionX = 0, directionZ = 0, dt = 0, run = false } = {}) {
     if (audition.pending) return false;
     if (audition.active) return walkAuditionSelected({ directionX, directionZ, dt, run });
+    if (school.active && school.phase === 'conversation') return false;
     if (journey.active && journey.phase === 'at-home') return false;
     const name = selectedCharacter;
     const mixer = characterMixers[name];
@@ -1869,8 +1925,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const step = currentSpeeds[name] * dt;
     const oldX = root.position.x;
     const oldZ = root.position.z;
-    const next = moveRootWithBenchCollision(name, root,
-      clamp(oldX + direction.x * step, -parkLimit, parkLimit), clamp(oldZ + direction.z * step, -parkLimit, parkLimit));
+    const desiredX = clamp(oldX + direction.x * step, -parkLimit, parkLimit);
+    const desiredZ = clamp(oldZ + direction.z * step, -parkLimit, parkLimit);
+    const next = school.active
+      ? { x: desiredX, z: desiredZ }
+      : moveRootWithBenchCollision(name, root, desiredX, desiredZ);
     if (Math.hypot(next.x - oldX, next.z - oldZ) < 0.0005) {
       if (walkingCharacters.has(name)) {
         characterActions[name]?.fadeOut(0.12);
@@ -1889,7 +1948,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     root.position.x = clamp(next.x, -parkLimit, parkLimit);
     root.position.z = clamp(next.z, -parkLimit, parkLimit);
-    root.position.y = parkHeightAt(root.position.x, root.position.z);
+    root.position.y = school.active ? 0 : parkHeightAt(root.position.x, root.position.z);
     player.x += root.position.x - oldX;
     player.z += root.position.z - oldZ;
     return true;
@@ -2013,12 +2072,52 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     };
   }
 
+  function beginJudgesReaction() {
+    audition.passed = true;
+    school.auditionPassed = true;
+    audition.phase = 'judges-reaction';
+    audition.elapsed = 0;
+    audition.phaseDuration = 2.0;
+    audition.cameraFocus = { x: 0, z: 7.0 };
+    playAuditionClip('SooAh', 'SooAhVictory', { loop: true, speed: 1.1 });
+    message = 'The judges smile and rise to applaud.';
+  }
+
+  function beginJudgeAcceptance() {
+    const ted = auditionRoots.Ted;
+    const sooAhActor = auditionRoots.SooAh;
+    ted.visible = true;
+    ted.position.set(-7.4, auditionStageTop, sooAhActor.position.z);
+    ted.rotation.y = Math.PI / 2;
+    const targetX = sooAhActor.position.x - 1.05;
+    const walkDuration = Math.abs(targetX - ted.position.x) / 2.7;
+    audition.tedReturn = { startX: ted.position.x, targetX, z: ted.position.z, elapsed: 0, duration: walkDuration };
+    audition.phase = 'judges-accepted';
+    audition.elapsed = 0;
+    audition.phaseDuration = 0;
+    audition.cameraFocus = { x: (targetX + sooAhActor.position.x) / 2, z: sooAhActor.position.z + 7.2 };
+    playAuditionClip('Ted', 'TedAuditionWalk', { loop: true, speed: 1.25, fade: 0.12 });
+    message = 'Judge: Soo-ah, you’re in! You’ve been selected for the NOVA trainee program.';
+  }
+
+  function beginAuditionCelebration() {
+    const ted = auditionRoots.Ted;
+    const sooAhActor = auditionRoots.SooAh;
+    ted.rotation.y = 0;
+    sooAhActor.rotation.y = 0;
+    playAuditionClip('Ted', 'TedHappyGesture', { loop: true, speed: 1.2 });
+    playAuditionClip('SooAh', 'SooAhVictory', { loop: true, speed: 1.1 });
+    audition.phase = 'celebration';
+    audition.elapsed = 0;
+    audition.phaseDuration = 3.2;
+    audition.cameraFocus = { x: (ted.position.x + sooAhActor.position.x) / 2, z: sooAhActor.position.z + 7.0 };
+    message = 'Ted and Soo-ah celebrate together. She has a place at NOVA.';
+  }
+
   function startSooAhAutoSection(index) {
     if (index >= sooAhDanceSections.length) {
-      audition.phase = 'complete';
-      audition.elapsed = 0;
-      audition.phaseDuration = 0;
-      message = 'Soo-ah completes her audition to warm applause.';
+      audition.score = 8;
+      beginJudgesReaction();
       return;
     }
     audition.autoSection = index;
@@ -2029,6 +2128,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function startSooAhAutoPerformance() {
+    audition.score = 8;
     focusSooAhPerformance();
     startSooAhAutoSection(0);
   }
@@ -2045,11 +2145,22 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function finishSooAhQte() {
-    const result = audition.score >= 5 ? 'Soo-ah finishes with a confident smile.' : 'Soo-ah finds her voice and finishes the song.';
+    if (audition.score < 5) {
+      audition.passed = false;
+      school.auditionPassed = false;
+      audition.phase = 'retry';
+      audition.elapsed = 0;
+      audition.phaseDuration = 0;
+      playAuditionClip('SooAh', 'SooAhAuditionIdle', { loop: true, speed: 1 });
+      message = 'The judges see potential. Press F to try the audition again.';
+      return;
+    }
     setAuditionPhase('sooah-finale', 'SooAh', 'SooAhVictory', {
       speed: 2.7,
-      message: result,
+      message: 'Soo-ah finishes with a confident smile.',
     });
+    audition.passed = true;
+    school.auditionPassed = true;
   }
 
   function advanceSooAhCue(missed = false) {
@@ -2086,6 +2197,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (audition.active || audition.pending) return true;
     if (!auditionAccepted) return false;
     audition.pending = true;
+    school.active = false;
+    school.phase = 'inactive';
+    school.dialogueIndex = 0;
+    school.auditionPassed = false;
+    audition.passed = false;
     journey.active = false;
     journey.phase = 'none';
     journey.destination = null;
@@ -2213,6 +2329,20 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function updateAudition(dt) {
     if (!audition.active) return;
+    if (audition.tedReturn) {
+      const returnState = audition.tedReturn;
+      returnState.elapsed = Math.min(returnState.duration, returnState.elapsed + dt);
+      const progress = returnState.elapsed / returnState.duration;
+      const ted = auditionRoots.Ted;
+      ted.position.x = returnState.startX + (returnState.targetX - returnState.startX) * progress;
+      ted.position.z = returnState.z;
+      if (progress >= 1) {
+        ted.rotation.y = 0;
+        audition.tedReturn = null;
+        beginAuditionCelebration();
+        return;
+      }
+    }
     if (audition.tedExit) {
       const exit = audition.tedExit;
       exit.elapsed = Math.min(exit.duration, exit.elapsed + dt);
@@ -2284,12 +2414,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     else if (audition.phase === 'ted-line') beginSooAhHappy();
     else if (audition.phase === 'sooah-happy') beginSooAhWalkIn();
     else if (audition.phase === 'sooah-auto') startSooAhAutoSection(audition.autoSection + 1);
-    else if (audition.phase === 'sooah-finale') {
-      audition.phase = 'complete';
-      audition.elapsed = 0;
-      audition.phaseDuration = 0;
-      message = 'The NOVA audition is complete.';
-    }
+    else if (audition.phase === 'sooah-finale') beginJudgesReaction();
+    else if (audition.phase === 'judges-reaction') beginJudgeAcceptance();
+    else if (audition.phase === 'celebration') beginSchoolDay();
   }
 
   function startHomeJourney() {
@@ -2325,6 +2452,109 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     message = `${label} arrives home. Press F for the next morning at NOVA.`;
   }
 
+  function beginSchoolDay() {
+    if (!school.auditionPassed) return false;
+    audition.active = false;
+    audition.phase = 'complete';
+    journey.active = false;
+    journey.phase = 'none';
+    journey.destination = null;
+    mrLeePatrolling = false;
+    mrLeeAware = false;
+    parkLimit = 18;
+    school.active = true;
+    school.phase = 'arrival';
+    school.dialogueIndex = 0;
+    school.arrived = 0;
+
+    characterRoots.Ted = parkCharacterRoots.Ted;
+    characterRoots.SooAh = parkCharacterRoots.SooAh;
+    const schoolStarts = {
+      Ted: { x: -0.55, z: 4.5, yaw: Math.PI / 2 },
+      SooAh: { x: 0.55, z: 4.5, yaw: -Math.PI / 2 },
+    };
+    const completeArrival = (name) => {
+      if (!standingPoses[name]) restoreStandingPose(name);
+      standingCharacters.add(name);
+      standingReady.add(name);
+      characterMode[name] = 'standingIdle';
+      school.arrived++;
+      if (school.arrived === 2) {
+        school.phase = 'conversation';
+        school.dialogueIndex = 1;
+        message = schoolDialogue[selectedCharacter][0];
+      }
+    };
+    schoolScene.add(parkCharacterRoots.Ted, parkCharacterRoots.SooAh);
+    for (const name of ['Ted', 'SooAh']) {
+      const root = characterRoots[name];
+      const mixer = characterMixers[name];
+      const start = schoolStarts[name];
+      root.visible = true;
+      root.position.set(start.x, 0, start.z);
+      root.rotation.y = start.yaw;
+      sittingCharacters.delete(name);
+      sittingDown.delete(name);
+      standingCharacters.add(name);
+      standingReady.delete(name);
+      walkingCharacters.delete(name);
+      turningCharacters.delete(name);
+      delete movementModes[name];
+      delete turnStates[name];
+      delete facingTargets[name];
+      sittingTalkTimers[name] = 0;
+      characterMode[name] = 'standingUp';
+      sitClearance[name] = { y: 0, z: 0 };
+      mixer.stopAllAction();
+      mixer.update(0);
+      if (standFinishHandlers[name]) {
+        mixer.removeEventListener('finished', standFinishHandlers[name]);
+        delete standFinishHandlers[name];
+      }
+      if (sitFinishHandlers[name]) {
+        mixer.removeEventListener('finished', sitFinishHandlers[name]);
+        delete sitFinishHandlers[name];
+      }
+      const action = playClip(name, sitToStandClips[name], { loop: false, fade: 0.12 });
+      if (!action) {
+        completeArrival(name);
+        continue;
+      }
+      action.timeScale = name === 'SooAh' ? sooAhStandSpeed : 1;
+      const onFinished = (event) => {
+        if (event.action !== action) return;
+        mixer.removeEventListener('finished', onFinished);
+        delete standFinishHandlers[name];
+        if (name === 'SooAh') groundSooAhDuringStand();
+        else groundTedDuringStand();
+        saveStandingPose(name);
+        completeArrival(name);
+      };
+      standFinishHandlers[name] = onFinished;
+      mixer.addEventListener('finished', onFinished);
+    }
+    followCamera.mode = 'free';
+    player.x = 0;
+    player.z = 8;
+    player.yaw = 0;
+    player.pitch = -0.08;
+    message = 'The next school day begins. Ted and Soo-ah meet at the school entrance.';
+    return true;
+  }
+
+  function advanceSchoolDialogue() {
+    if (!school.active) return false;
+    if (school.phase === 'arrival') return true;
+    const lines = schoolDialogue[selectedCharacter];
+    if (school.phase === 'conversation' && school.dialogueIndex < lines.length) {
+      message = lines[school.dialogueIndex++];
+      if (school.dialogueIndex >= lines.length) school.phase = 'ready-to-tell';
+      return true;
+    }
+    message = 'After class, Ted will go with Soo-ah to tell Mr. and Mrs. Lee.';
+    return true;
+  }
+
   function mapState() {
     if (!journey.active) return { visible: false };
     const root = characterRoots[selectedCharacter];
@@ -2351,7 +2581,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function interact() {
     if (audition.pending) return true;
+    if (school.active) return advanceSchoolDialogue();
     if (audition.active) {
+      if (audition.phase === 'retry') {
+        startSooAhQte();
+        return true;
+      }
       if (audition.phase === 'ted-enter-player') {
         if (auditionRoots.Ted.position.z <= auditionStageZ + 1.1) beginTedSinging();
         else message = 'Walk Ted farther onto the stage first.';
@@ -2689,6 +2924,22 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function hud() {
+    if (school.active) {
+      const task = school.phase === 'arrival' ? 'Next school day · Seoul school entrance'
+        : school.phase === 'conversation' ? 'Ted and Soo-ah discuss telling Mr. and Mrs. Lee'
+          : 'After class · tell Mr. and Mrs. Lee together';
+      return {
+        task,
+        prompt: school.phase === 'conversation' ? 'F · Continue conversation' : '',
+        message,
+        hint: school.phase === 'conversation'
+          ? 'Ted and Soo-ah are together at school. Mr. Lee does not know about the audition yet.'
+          : 'Arrows walk · Shift + arrows run · WASD moves the camera',
+        selectedCharacter,
+        standing: standingCharacters.has(selectedCharacter),
+        walkingReady: standingReady.has(selectedCharacter),
+      };
+    }
     if (audition.pending) {
       return { task: 'The next morning at NOVA', prompt: 'Preparing the audition stage…', message, hint: 'Loading Ted and Soo-ah’s performance clips.' };
     }
@@ -2712,13 +2963,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         'sooah-auto': 'Soo-ah dances and sings',
         'sooah-qte': `Soo-ah’s performance · ${audition.score} on beat`,
         'sooah-finale': 'Soo-ah finishes her audition',
-        complete: 'Soo-ah completes the NOVA audition',
+        retry: 'Soo-ah gets another audition try',
+        'judges-reaction': 'The NOVA judges applaud',
+        'judges-accepted': 'Soo-ah has been selected for NOVA',
+        celebration: 'Ted and Soo-ah celebrate together',
       };
       const prompt = audition.phase === 'ted-enter-player' ? '↑ · Walk Ted to the mark'
         : audition.phase === 'sooah-enter' ? 'Soo-ah walks to her mark'
         : audition.phase === 'sooah-qte'
           ? `Beat ${Math.min(audition.cueIndex + 1, audition.sequence.length)}/${audition.sequence.length} · ${arrow[audition.sequence[audition.cueIndex]] ?? '♪'}`
-          : audition.phase === 'complete' ? 'Audition complete' : 'Watch the performance';
+          : audition.phase === 'retry' ? 'F · Try the audition again' : 'Watch the performance';
       const hint = audition.phase === 'ted-enter-player'
         ? 'Arrow keys walk Ted · F starts his song at the stage mark'
         : audition.phase === 'sooah-enter' ? 'Soo-ah walks into the spotlight'
@@ -2773,6 +3027,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     updateAudition(dt);
     updateHomeJourney();
     if (walkingCharacters.has('Ted')) groundTedDuringStand();
+    if (school.active && walkingCharacters.has('SooAh')) groundSooAhDuringStand();
     if (standRootTransitions.SooAh) groundSooAhDuringStand();
     if (standRootTransitions.Ted) groundTedDuringStand();
     for (const [name, transition] of Object.entries(standRootTransitions)) {
@@ -2844,7 +3099,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     if (tedSitTransition) applyTedSitHeight(tedSitTransition.action.time / tedSitTransition.duration);
     else if (sittingCharacters.has('Ted') && !sittingDown.has('Ted')) alignTedPelvisToSeat({ horizontal: true });
-    for (const name of ['SooAh', 'Ted']) {
+    if (!school.active) for (const name of ['SooAh', 'Ted']) {
       if (sittingCharacters.has(name) || sittingDown.has(name) || characterMode[name] === 'standingUp') clampSeatedPelvis(name);
     }
     updateMochiEating(dt);
@@ -3364,5 +3619,5 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     },
   };
 
-  return { get scene() { return audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
+  return { get scene() { return school.active ? schoolScene : audition.active ? auditionScene : scene; }, cameras: [{ name: 'PromiseGrove', camera }], camera, update, move, walkSelected, look, interact, selectCharacter, setCameraView, startRoute, startHomeJourney, startAudition, auditionActive: () => audition.active || audition.pending, handleAuditionKey, mapState, setWalkingVariant, setLookBehindRun, triggerNervous, triggerTerrified, clearEmotion, standSelected, sitSelected, canStandSelected, canSitSelected, setMrLeeMode, hud, player, debug };
 }
