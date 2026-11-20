@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { buildAuditionStage } from './audition-stage.js';
+import { buildAuditionStage } from './audition-stage.js?v=2';
 import { buildCafeFurniture } from './cafe-furniture.js';
 import { buildSchoolCourtyard } from './school-courtyard.js';
 
@@ -1356,14 +1356,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         auditionMixers[name] = new T.AnimationMixer(root);
         mixers.push(auditionMixers[name]);
       }
-      const judgeXs = camera.aspect < 0.8 ? [-1.1, 0, 1.1] : [-3.2, 0, 3.2];
-      if (camera.aspect < 0.8) {
-        for (let index = 0; index < judgeXs.length; index++) {
-          auditionStage.getObjectByName(`Audition_JudgeChairSeat_${index + 1}`).position.x = judgeXs[index];
-          auditionStage.getObjectByName(`Audition_JudgeChairBack_${index + 1}`).position.x = judgeXs[index];
-        }
+      const compactJudges = camera.aspect < 0.85;
+      const judgeXs = compactJudges ? [-1.7, -0.55, 1.7] : [-2.0, -0.6, 2.6];
+      for (let index = 0; index < judgeXs.length; index++) {
+        auditionStage.getObjectByName(`Audition_JudgeChairSeat_${index + 1}`).position.x = judgeXs[index];
+        auditionStage.getObjectByName(`Audition_JudgeChairBack_${index + 1}`).position.x = judgeXs[index];
+      }
+      if (compactJudges) {
         auditionStage.getObjectByName('Audition_JudgeDeskTop').scale.x = 0.58;
         auditionStage.getObjectByName('Audition_JudgeDeskFront').scale.x = 0.58;
+        auditionStage.getObjectByName('Audition_JudgeDeskGoldTrim').scale.x = 0.58;
+        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_-4.2').position.x = -2.35;
+        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_4.2').position.x = 2.35;
       }
       for (const [index, asset] of judgeAssets.entries()) {
         const source = auditionJudgeSources[index];
@@ -1373,8 +1377,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         fitToHeight(asset, 1.48);
         asset.name = `NOVAJudge_${source.title.replaceAll(' ', '')}`;
         asset.visible = false;
-        asset.position.set(judgeXs[index], 0, 8.55);
-        asset.rotation.y = Math.PI;
+        asset.position.set(judgeXs[index], auditionStageTop + 0.04, -4.0);
+        asset.rotation.y = 0;
         setShadows(asset);
         auditionScene.add(asset);
         const mixer = new T.AnimationMixer(asset);
@@ -1706,6 +1710,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     walking: false,
     figureTransition: null,
     tedExit: null,
+    tedThumbTurn: null,
     tedReturn: null,
     cameraFocus: null,
     passed: false,
@@ -2479,9 +2484,20 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function beginTedThumbsUp() {
+    const ted = auditionRoots.Ted;
+    const sooAhActor = auditionRoots.SooAh;
+    audition.tedThumbTurn = {
+      startYaw: ted.rotation.y,
+      targetYaw: Math.atan2(
+        sooAhActor.position.x - ted.position.x,
+        sooAhActor.position.z - ted.position.z,
+      ),
+      elapsed: 0,
+      duration: 0.38,
+    };
     setAuditionPhase('ted-thumbs-up', 'Ted', 'TedThumbsUp', {
       speed: 1.7,
-      message: 'Ted gives Soo-ah a thumbs-up.',
+      message: 'Ted turns to Soo-ah and gives her a thumbs-up.',
     });
   }
 
@@ -2852,6 +2868,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         auditionCurrentClip.Ted = null;
         tedAuditionFigure.visible = false;
         audition.tedExit = null;
+      }
+    }
+    if (audition.tedThumbTurn) {
+      const turn = audition.tedThumbTurn;
+      turn.elapsed = Math.min(turn.duration, turn.elapsed + dt);
+      const progress = turn.elapsed / turn.duration;
+      const eased = progress * progress * (3 - 2 * progress);
+      auditionRoots.Ted.rotation.y = turn.startYaw + wrapAngle(turn.targetYaw - turn.startYaw) * eased;
+      if (progress >= 1) {
+        auditionRoots.Ted.rotation.y = turn.targetYaw;
+        audition.tedThumbTurn = null;
       }
     }
     if (audition.cameraFocus) {

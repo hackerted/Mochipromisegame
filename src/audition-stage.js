@@ -14,7 +14,9 @@ export function buildAuditionStage(THREE) {
   const trimMat = material('Stage_GoldTrim', '#d5a95f', 0.42, 0.25);
   const speakerMat = material('Stage_Speaker', '#202630', 0.65);
   const micMat = material('Stage_Microphone', '#4e5764', 0.38, 0.65);
-  const judgeDeskMat = material('JudgeDesk_Walnut', '#473a3d', 0.68);
+  const judgeDeskMat = material('JudgeDesk_Walnut', '#a67652', 0.5);
+  judgeDeskMat.emissive.set('#24150d');
+  judgeDeskMat.emissiveIntensity = 0.45;
   const judgeChairMat = material('JudgeChair_DeepBlue', '#293c58', 0.78);
   const robotWhite = material('Ted_Figure_White', '#e6e9ee', 0.45);
   const robotBlue = material('Ted_Figure_Blue', '#3b6a9d', 0.42, 0.1);
@@ -70,12 +72,22 @@ export function buildAuditionStage(THREE) {
     box(`Audition_Speaker_${x < 0 ? 'L' : 'R'}`, [0.92, 1.65, 0.68], [x, 1.2, -1.2], speakerMat);
   }
 
-  box('Audition_JudgeFloor', [14, 0.08, 6], [0, -0.04, 8.25], woodEdge);
-  box('Audition_JudgeDeskTop', [9.6, 0.14, 0.92], [0, 1.02, 7.45], judgeDeskMat);
-  box('Audition_JudgeDeskFront', [9.2, 0.82, 0.16], [0, 0.53, 7.0], judgeDeskMat);
+  box('Audition_JudgeFloor', [14, 0.08, 2.8], [0, 0.38, -3.9], woodEdge);
+  box('Audition_JudgeDeskTop', [9.6, 0.14, 0.92], [0, 1.03, -3.15], judgeDeskMat);
+  box('Audition_JudgeDeskFront', [9.2, 0.20, 0.16], [0, 0.86, -2.69], judgeDeskMat);
+  box('Audition_JudgeDeskGoldTrim', [9.25, 0.045, 0.19], [0, 0.98, -2.57], trimMat);
+  box('Audition_JudgeDeskNameplate', [2.0, 0.14, 0.05], [0, 0.86, -2.56], trimMat);
+  for (const x of [-4.2, 4.2]) {
+    box(`Audition_JudgeDeskPedestal_${x}`, [0.32, 0.54, 0.72], [x, 0.69, -3.15], judgeDeskMat);
+  }
   for (const [index, x] of [-3.2, 0, 3.2].entries()) {
-    box(`Audition_JudgeChairSeat_${index + 1}`, [1.05, 0.12, 0.88], [x, 0.47, 8.55], judgeChairMat);
-    box(`Audition_JudgeChairBack_${index + 1}`, [1.05, 0.92, 0.14], [x, 0.94, 8.98], judgeChairMat);
+    box(`Audition_JudgeChairSeat_${index + 1}`, [1.05, 0.12, 0.88], [x, 0.85, -4.0], judgeChairMat);
+    box(`Audition_JudgeChairBack_${index + 1}`, [1.05, 0.92, 0.14], [x, 1.32, -4.43], judgeChairMat);
+    for (const sideX of [-0.42, 0.42]) {
+      for (const sideZ of [-0.32, 0.32]) {
+        box(`Audition_JudgeChairLeg_${index + 1}_${sideX}_${sideZ}`, [0.07, 0.37, 0.07], [x + sideX, 0.605, -4.0 + sideZ], judgeChairMat);
+      }
+    }
   }
 
   const mic = new THREE.Group();
