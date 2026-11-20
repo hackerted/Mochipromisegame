@@ -1436,6 +1436,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     return action;
   };
+  const fadeMovementToIdle = (name, fade) => {
+    if (name === 'Ted' && standingCharacters.has(name) && !sittingCharacters.has(name)) {
+      playTedStandingIdle(fade);
+    } else {
+      characterActions[name]?.fadeOut(fade);
+      fadingMovement[name] = fade;
+    }
+    walkingCharacters.delete(name);
+    delete movementModes[name];
+    characterMode[name] = 'standingIdle';
+  };
   const restoreIdle = (name) => {
     const mixer = characterMixers[name];
     if (!mixer) return;
@@ -2257,11 +2268,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (!hasInput) {
       delete pendingMoves[name];
       if (walkingCharacters.has(name)) {
-        characterActions[name]?.fadeOut(0.18);
-        fadingMovement[name] = 0.18;
-        walkingCharacters.delete(name);
-        delete movementModes[name];
-        characterMode[name] = 'standingIdle';
+        fadeMovementToIdle(name, 0.18);
       }
       delete turnConsumed[name];
       return false;
@@ -2317,12 +2324,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       : moveRootWithBenchCollision(name, root, desiredX, desiredZ);
     if (Math.hypot(next.x - oldX, next.z - oldZ) < 0.0005) {
       if (walkingCharacters.has(name)) {
-        characterActions[name]?.fadeOut(0.12);
-        fadingMovement[name] = 0.12;
-        walkingCharacters.delete(name);
+        fadeMovementToIdle(name, 0.12);
+      } else {
+        delete movementModes[name];
+        characterMode[name] = 'standingIdle';
       }
-      delete movementModes[name];
-      characterMode[name] = 'standingIdle';
       return true;
     }
     if (movementModes[name] !== desiredMode) {
@@ -2342,11 +2348,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function stopCafeWalker(name) {
     if (!walkingCharacters.has(name)) return;
-    characterActions[name]?.fadeOut(0.16);
-    fadingMovement[name] = 0.16;
-    walkingCharacters.delete(name);
-    delete movementModes[name];
-    characterMode[name] = 'standingIdle';
+    fadeMovementToIdle(name, 0.16);
   }
 
   function updateCafeCompanion(dt) {
@@ -2916,13 +2918,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const root = characterRoots[name];
     if (Math.hypot(root.position.x - journey.destination.x, root.position.z - journey.destination.z) > 2.2) return;
     journey.phase = 'at-home';
-    if (walkingCharacters.has(name)) {
-      characterActions[name]?.fadeOut(0.15);
-      walkingCharacters.delete(name);
-      delete movementModes[name];
-      fadingMovement[name] = 0.15;
-    }
-    characterMode[name] = 'standingIdle';
+    if (walkingCharacters.has(name)) fadeMovementToIdle(name, 0.15);
+    else characterMode[name] = 'standingIdle';
     const label = name === 'Ted' ? 'Ted' : 'Soo-ah';
     message = `${label} arrives home. Press F for the next morning at NOVA.`;
   }
@@ -3239,11 +3236,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (t >= 1) {
         family.entry = null;
         for (const name of ['Ted', 'SooAh']) {
-          characterActions[name]?.fadeOut(0.16);
-          walkingCharacters.delete(name);
-          delete movementModes[name];
-          fadingMovement[name] = 0.16;
-          characterMode[name] = 'standingIdle';
+          fadeMovementToIdle(name, 0.16);
         }
         family.phase = 'conversation';
         family.dialogueIndex = 0;
@@ -4050,9 +4043,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       root.rotation.y = state.startYaw + (state.endYaw - state.startYaw) * eased;
       if (progress >= 1) {
         root.rotation.y = state.endYaw;
-        const mixer = characterMixers[name];
-        mixer.stopAllAction();
-        mixer.update(0);
         delete turnStates[name];
         turningCharacters.delete(name);
         delete turningDirection[name];
@@ -4061,6 +4051,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         characterMode[name] = 'standingIdle';
         if (name === 'Ted' && standingCharacters.has(name) && !sittingCharacters.has(name)) playTedStandingIdle(0.14);
         else {
+          const mixer = characterMixers[name];
+          mixer.stopAllAction();
+          mixer.update(0);
           restoreStandingPose(name);
           characterActions[name] = null;
         }
@@ -4085,11 +4078,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         continue;
       }
       delete fadingMovement[name];
-      const mixer = characterMixers[name];
-      mixer?.stopAllAction();
-      mixer?.update(0);
       if (name === 'Ted' && standingCharacters.has(name) && !sittingCharacters.has(name)) playTedStandingIdle(0.14);
       else {
+        const mixer = characterMixers[name];
+        mixer?.stopAllAction();
+        mixer?.update(0);
         restoreStandingPose(name);
         characterActions[name] = null;
       }
