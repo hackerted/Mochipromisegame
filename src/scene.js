@@ -3041,7 +3041,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function advanceSchoolDialogue() {
     if (!school.active) return false;
-    if (school.phase === 'arrival') return true;
+    if (school.phase === 'arrival') {
+      message = 'Soo-ah is getting ready. The conversation will start in a moment.';
+      return true;
+    }
     const lines = schoolDialogue[selectedCharacter];
     if (school.phase === 'conversation' && school.dialogueIndex < lines.length) {
       message = lines[school.dialogueIndex++];
@@ -3909,7 +3912,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       return { task: 'Soo-ah has told her parents about NOVA', prompt: '', message, hint: 'Ted and Soo-ah are outside Lee’s Cafe.', selectedCharacter, standing: true, walkingReady: true };
     }
     if (school.active) {
-      const task = school.phase === 'arrival' ? 'Next school day · Seoul school entrance'
+      const task = school.phase === 'arrival' ? 'Soo-ah is getting ready to talk'
         : school.phase === 'conversation' ? 'Ted and Soo-ah discuss telling Mr. and Mrs. Lee'
           : 'After class · walk together to Lee’s Cafe';
       return {
@@ -3919,7 +3922,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         message,
         hint: school.phase === 'conversation'
           ? 'Ted and Soo-ah are together at school. Mr. Lee does not know about the audition yet.'
-          : 'Arrows walk · Shift + arrows run · WASD moves the camera',
+          : school.phase === 'arrival' ? 'The conversation starts when Soo-ah is ready.'
+            : 'Arrows walk · Shift + arrows run · WASD moves the camera',
         selectedCharacter,
         standing: standingCharacters.has(selectedCharacter),
         walkingReady: standingReady.has(selectedCharacter),
@@ -4010,7 +4014,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         ? standingReady.has(selectedCharacter) ? `${label} standing · arrows turn + walk · Q sit at bench` : `${label} is standing up…`
         : `${label} selected · E stand at bench`;
     const friendPrompt = target === 'sooAh' || target === 'ted'
-      ? mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi'
+      ? routeStarted && mrLeeAware ? 'Mr. Lee is watching · move out of sight'
+        : mochiHolder === selectedCharacter && !mochiShared ? 'F · Give the mochi'
         : !mochiShared ? 'Pick up the mochi first'
           : !mochiConsumed ? `${mochiEating?.recipient === 'SooAh' ? 'Soo-ah' : 'Ted'} is eating the mochi…`
             : `F · Talk to ${target === 'sooAh' ? 'Soo-ah' : 'Ted'}`
