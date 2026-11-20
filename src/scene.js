@@ -575,9 +575,9 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   cafeCounter.traverse((node) => { if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; } });
   cafeCounter.position.z = 0.18;
   familyScene.add(cafeCounter);
-  const cafeWarmLight = new T.PointLight('#ffd29c', 8, 8, 2);
+  const cafeWarmLight = new T.PointLight('#ffcc83', 4.5, 8, 2);
   cafeWarmLight.name = 'LeeCafeWarmLight';
-  cafeWarmLight.position.set(0, 3.1, 0.4);
+  cafeWarmLight.position.set(0, 2.72, 0.4);
   familyScene.add(cafeWarmLight);
 
   function addParkAsset(asset, name, x, z, scale, yaw = 0) {

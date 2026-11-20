@@ -32,6 +32,10 @@ export function buildCafeFurniture(THREE) {
     fridgeInterior: new THREE.MeshStandardMaterial({ color: '#dce6df', roughness: 0.72 }),
     berry: new THREE.MeshStandardMaterial({ color: '#c83d4f', roughness: 0.54 }),
     ice: new THREE.MeshStandardMaterial({ color: '#edf4f2', roughness: 0.2, transparent: true, opacity: 0.82 }),
+    lampLens: new THREE.MeshStandardMaterial({ color: '#fff0d5', emissive: '#ffd29a', emissiveIntensity: 1.4, roughness: 0.36 }),
+    blossomPink: new THREE.MeshStandardMaterial({ color: '#df9f9b', roughness: 0.76 }),
+    blossomCream: new THREE.MeshStandardMaterial({ color: '#f3e6c9', roughness: 0.76 }),
+    leaf: new THREE.MeshStandardMaterial({ color: '#657d5c', roughness: 0.88 }),
   };
   const fridgeGlass = new THREE.MeshBasicMaterial({ color: '#dff1e8', side: THREE.DoubleSide, transparent: true, opacity: 0.18, depthWrite: false });
 
@@ -154,6 +158,24 @@ export function buildCafeFurniture(THREE) {
     for (const z of [-0.23, 1.07]) addMesh(room, `CafeSideWindowFrame_${side}_${z}`, new THREE.BoxGeometry(0.08, 1.25, 0.055), materials.wallWood, [side * 2.70, 1.92, z]);
     for (const y of [1.32, 2.52]) addMesh(room, `CafeSideWindowRail_${side}_${y}`, new THREE.BoxGeometry(0.08, 0.055, 1.35), materials.wallWood, [side * 2.70, y, 0.42]);
   }
+  const ceiling = addRoundedBox(room, 'CafeCeiling', [5.8, 0.08, 4.9], 0.025, materials.plaster, [0, 3.04, 0]);
+  ceiling.castShadow = false;
+  for (const [i, [x, z]] of [[-1.7, -1.25], [1.7, -1.25], [-1.7, 1.1], [1.7, 1.1]].entries()) {
+    addMesh(room, `CafeDownlightTrim_${i}`, new THREE.CylinderGeometry(0.09, 0.09, 0.025, 20), materials.wallTrim, [x, 2.986, z]);
+    addMesh(room, `CafeDownlightLens_${i}`, new THREE.SphereGeometry(0.052, 16, 10), materials.lampLens, [x, 2.95, z]);
+    const light = new THREE.PointLight('#ffd3a0', 1.1, 4.3, 2);
+    light.name = `CafeDownlight_${i}`;
+    light.position.set(x, 2.72, z);
+    room.add(light);
+  }
+  for (const side of [-1, 1]) {
+    addMesh(room, `CafeSconcePlate_${side}`, new THREE.BoxGeometry(0.035, 0.22, 0.18), materials.brass, [side * 2.70, 2.12, -0.15]);
+    addMesh(room, `CafeSconceShade_${side}`, new THREE.SphereGeometry(0.09, 16, 12), materials.lampLens, [side * 2.62, 2.18, -0.15]);
+    const sconce = new THREE.PointLight('#ffd09a', 0.7, 2.8, 2);
+    sconce.name = `CafeWallSconce_${side}`;
+    sconce.position.set(side * 2.52, 2.18, -0.15);
+    room.add(sconce);
+  }
 
   const boardCanvas = document.createElement('canvas');
   boardCanvas.width = 512;
@@ -179,6 +201,16 @@ export function buildCafeFurniture(THREE) {
   boardFace.name = 'BingsuMenuBoard';
   boardFace.position.set(0, 2.35, 2.204);
   room.add(boardFace);
+  addRoundedBox(room, 'CafeFlowerShelf', [1.18, 0.055, 0.25], 0.02, materials.lightWood, [1.63, 1.98, 2.15]);
+  for (const [index, x] of [[0, 1.35], [1, 1.86]]) {
+    const vaseName = `CafeFlowerVase_${index}`;
+    addMesh(room, `${vaseName}Body`, new THREE.CylinderGeometry(0.045, 0.062, 0.11, 14), materials.cream, [x, 2.062, 2.06]);
+    for (let bloom = 0; bloom < 3; bloom++) {
+      const stemX = x + (bloom - 1) * 0.055;
+      addMesh(room, `${vaseName}Stem_${bloom}`, new THREE.CylinderGeometry(0.004, 0.006, 0.17, 6), materials.leaf, [stemX, 2.19 + (bloom === 1 ? 0.025 : 0), 2.06]);
+      addMesh(room, `${vaseName}Flower_${bloom}`, new THREE.SphereGeometry(0.038, 10, 8), index ? materials.blossomCream : materials.blossomPink, [stemX, 2.29 + (bloom === 1 ? 0.025 : 0), 2.06]);
+    }
+  }
 
   const prep = new THREE.Group();
   prep.name = 'LeeCafePreparationStation';
