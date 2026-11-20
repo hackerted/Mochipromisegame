@@ -148,6 +148,27 @@ function inPlaceStandTransition(clip, verticalOffset = 0, keepHipsPosition = tru
   return adjusted;
 }
 
+function makeStandingIdle(THREE, sourceClip) {
+  if (!sourceClip) return null;
+  const duration = 3.2;
+  const times = new Float32Array([0, duration / 2, duration]);
+  const tracks = sourceClip.tracks.map((track) => {
+    const pose = Array.from(track.createInterpolant().evaluate(sourceClip.duration));
+    const values = new Float32Array(pose.length * times.length);
+    values.set(pose);
+    values.set(pose, pose.length * 2);
+    if (track.name.toLowerCase().includes('spine') && track.name.endsWith('.quaternion') && pose.length === 4) {
+      const breathing = new THREE.Quaternion().fromArray(pose)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.015));
+      values.set(breathing.toArray(), pose.length);
+    } else {
+      values.set(pose, pose.length);
+    }
+    return new track.constructor(track.name, times, values);
+  });
+  return new THREE.AnimationClip('TedStandingIdle', duration, tracks);
+}
+
 function inPlaceSitDown(clip) {
   if (!clip) return clip;
   const adjusted = clip.clone();
@@ -434,6 +455,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   ted.traverse((node) => {
     if (node.isBone) node.name = T.PropertyBinding.sanitizeNodeName(node.name);
   });
+  let tedStandingIdle = null;
   let tedHips = null;
   let tedRightHand = null;
   let tedHead = null;
@@ -1337,16 +1359,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     auditionCurrentClip[actor] = name;
     return { action, duration: Math.max(clip.duration / Math.max(speed, 0.01), 0.25) };
   }
-  // Startup waits only for what Begin needs (Ted's seated idle drives the mixer setup below; each
-  // character's sit-to-stand plays on Begin). The rest load later: see preloadSoon at the end.
+  // Ted's model only embeds a seated clip; derive his standing idle from the sit-to-stand endpoint.
   await Promise.all(['TedSitting', 'SooAhSitToStand', 'TedSitToStand'].map(ensureClip));
+  tedStandingIdle = makeStandingIdle(T, sitToStandClips.Ted);
   const activeWalkVariant = { Ted: 'folder' };
   const walkClipFor = (name) => name === 'Ted' && activeWalkVariant.Ted === 'alternative'
     ? walkingVariants.Ted : walkingClips[name];
   const emotionalStates = {};
   const sittingTalkTimers = { SooAh: 0, Ted: 0 };
   let lookBehindRun = false;
-  const sittingCharacters = new Set(['SooAh', 'Ted']);
+  const sittingCharacters = new Set(['SooAh']);
   const playClip = (name, clip, { loop = false, fade = 0.16 } = {}) => {
     const mixer = characterMixers[name];
     if (!mixer || !clip) return null;
@@ -1362,6 +1384,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     characterActions[name] = action;
     return action;
   };
+  const playTedStandingIdle = (fade = 0.16) => {
+    if (!tedStandingIdle || !characterMixers.Ted) return null;
+    const action = playClip('Ted', tedStandingIdle, { loop: true, fade });
+    action?.setEffectiveWeight(1);
+    if (action) {
+      action.timeScale = 1;
+      characterMode.Ted = 'standingIdle';
+    }
+    return action;
+  };
   const restoreIdle = (name) => {
     const mixer = characterMixers[name];
     if (!mixer) return;
@@ -1374,6 +1406,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
       return;
     }
+    if (name === 'Ted' && standingCharacters.has(name)) {
+      playTedStandingIdle(0.16);
+      return;
+    }
     mixer.stopAllAction();
     mixer.update(0);
     restoreStandingPose(name);
@@ -1384,9 +1420,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (actorClips?.length) {
       const mixer = new T.AnimationMixer(actor);
       const name = actor === sooAh ? 'SooAh' : actor === ted ? 'Ted' : null;
-      const idleClip = name ? sittingClips[name] : actorClips[0];
-      const action = mixer.clipAction(idleClip);
-      action.play();
+      const idleClip = name === 'Ted' ? null : name ? sittingClips[name] : actorClips[0];
+      const action = idleClip ? mixer.clipAction(idleClip) : null;
+      if (action) {
+        action.setLoop(T.LoopRepeat, Infinity);
+        action.clampWhenFinished = false;
+        action.setEffectiveWeight(1);
+        action.play();
+      }
       mixers.push(mixer);
       if (name) {
         characterMixers[name] = mixer;
@@ -1394,13 +1435,20 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       }
     }
   }
-  characterMixers.Ted?.update(0);
+  const tedSeatPoseMixer = new T.AnimationMixer(ted);
+  const tedSeatPoseAction = tedSeatPoseMixer.clipAction(sittingClips.Ted);
+  tedSeatPoseAction.setLoop(T.LoopOnce, 1);
+  tedSeatPoseAction.clampWhenFinished = true;
+  tedSeatPoseAction.play();
+  tedSeatPoseMixer.update(0);
   alignTedPelvisToSeat();
   tedHips.getWorldPosition(tedSeatedPelvis);
   bench.worldToLocal(tedSeatedPelvis);
   // The load-pose pelvis sits too far back for Ted's deformed legs to clear the seat.
   tedSeatedPelvis.z += 0.12;
   tedSeatedPelvisReady = true;
+  tedSeatPoseMixer.stopAllAction();
+  tedSeatPoseMixer.uncacheRoot(ted);
   const mrLeeMixer = new T.AnimationMixer(mrLee);
   mixers.push(mrLeeMixer);
   let mrLeeAction = null;
@@ -1670,7 +1718,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
   };
   const sitClearance = { SooAh: { y: 0.04, z: 0 }, Ted: { y: 0, z: 0.12 } };
-  const characterMode = { SooAh: 'sitting', Ted: 'sitting' };
+  const characterMode = { SooAh: 'sitting', Ted: 'standingIdle' };
   const standingReady = new Set();
   const walkingCharacters = new Set();
   const movementModes = {};
@@ -1714,6 +1762,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     tedRoot.position.y += groundY - tedStandBounds.setFromObject(tedRoot, true).min.y;
     tedRoot.updateMatrixWorld(true);
   };
+  sittingCharacters.delete('Ted');
+  standingCharacters.add('Ted');
+  standingReady.add('Ted');
+  tedRoot.position.set(-1.05, parkHeightAt(-1.05, 0.2), 0.2);
+  tedRoot.rotation.y = Math.atan2(sooAh.position.x - tedRoot.position.x, sooAh.position.z - tedRoot.position.z);
+  if (playTedStandingIdle(0)) {
+    characterMixers.Ted.update(0);
+    groundTedDuringStand();
+    saveStandingPose('Ted');
+  }
   const sittingDown = new Set();
   const sitFinishHandlers = {};
   let debugRecording = false;
@@ -1875,15 +1933,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const root = characterRoots[name];
     const mixer = characterMixers[name];
     const clip = sitToStandClips[name];
-    if (!root || !mixer || !clip) return false;
+    if (!root || !mixer || (name === 'SooAh' && !clip)) return false;
     routeStarted = true;
     root.position.set(routeSpawn.x, parkHeightAt(routeSpawn.x, routeSpawn.z), routeSpawn.z);
     root.rotation.y = Math.atan2(-routeSpawn.x, -routeSpawn.z);
-    sitClearance[name] = { y: 0, z: 0 };
-    sittingCharacters.delete(name);
-    standingReady.delete(name);
-    standingCharacters.add(name);
-    characterMode[name] = 'standingUp';
     player.x = routeSpawn.x;
     player.z = routeSpawn.z;
     player.yaw = Math.atan2(routeSpawn.x, routeSpawn.z);
@@ -1894,6 +1947,31 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mrLeePatrolIndex = 1;
     mrLeePatrolWait = 3;
     setMrLeeMode('idle');
+    if (name === 'Ted') {
+      sittingCharacters.delete(name);
+      sittingDown.delete(name);
+      standingCharacters.add(name);
+      standingReady.add(name);
+      characterMode[name] = 'standingIdle';
+      characterMixers[name].stopAllAction();
+      characterMixers[name].update(0);
+      characterActions[name] = null;
+      delete facingTargets[name];
+      delete pendingMoves[name];
+      delete turnStates[name];
+      turningCharacters.delete(name);
+      playTedStandingIdle(0);
+      characterMixers[name].update(0);
+      groundTedDuringStand();
+      saveStandingPose(name);
+      message = 'Ted is standing and ready to walk.';
+      return true;
+    }
+    sitClearance[name] = { y: 0, z: 0 };
+    sittingCharacters.delete(name);
+    standingReady.delete(name);
+    standingCharacters.add(name);
+    characterMode[name] = 'standingUp';
     const action = playClip(name, clip, { loop: false, fade: 0.16 });
     if (!action) return false;
     action.timeScale = name === 'SooAh' ? sooAhStandSpeed : 1;
@@ -2831,6 +2909,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       if (!standingPoses[name]) restoreStandingPose(name);
       standingCharacters.add(name);
       standingReady.add(name);
+      if (name === 'Ted') playTedStandingIdle(0.16);
       characterMode[name] = 'standingIdle';
       school.arrived++;
       if (school.arrived === 2) {
@@ -3324,7 +3403,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       root.rotation.y = Math.PI;
       standingCharacters.add(name);
       standingReady.add(name);
-      characterMode[name] = 'standingIdle';
+      if (name === 'Ted') playTedStandingIdle(0.16);
+      else characterMode[name] = 'standingIdle';
     }
     parkLimit = parkHalf - 0.9;
     followCamera.mode = 'front';
@@ -3633,7 +3713,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       placeAtBenchAnchor(name, standingAnchors[name]);
       saveStandingPose(name);
       standingReady.add(name);
-      characterMode[name] = 'standingIdle';
+      if (name === 'Ted') playTedStandingIdle(0.14);
+      else characterMode[name] = 'standingIdle';
     };
     standFinishHandlers[name] = onFinished;
     mixer.addEventListener('finished', onFinished);
@@ -3902,7 +3983,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     updateCafeFamilyScene(dt);
     updateAudition(dt);
     updateHomeJourney();
-    if (walkingCharacters.has('Ted')) groundTedDuringStand();
+    if (walkingCharacters.has('Ted') || characterMode.Ted === 'standingIdle') groundTedDuringStand();
     if (school.active && walkingCharacters.has('SooAh')) groundSooAhDuringStand();
     if (standRootTransitions.SooAh) groundSooAhDuringStand();
     if (standRootTransitions.Ted) groundTedDuringStand();
@@ -3929,14 +4010,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         const mixer = characterMixers[name];
         mixer.stopAllAction();
         mixer.update(0);
-        restoreStandingPose(name);
         delete turnStates[name];
         turningCharacters.delete(name);
         delete turningDirection[name];
         turnConsumed[name] = state.direction;
         delete movementModes[name];
         characterMode[name] = 'standingIdle';
-        characterActions[name] = null;
+        if (name === 'Ted' && standingCharacters.has(name) && !sittingCharacters.has(name)) playTedStandingIdle(0.14);
+        else {
+          restoreStandingPose(name);
+          characterActions[name] = null;
+        }
       }
     }
     for (const name of Object.keys(sittingTalkTimers)) {
@@ -3961,8 +4045,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       const mixer = characterMixers[name];
       mixer?.stopAllAction();
       mixer?.update(0);
-      restoreStandingPose(name);
-      characterActions[name] = null;
+      if (name === 'Ted' && standingCharacters.has(name) && !sittingCharacters.has(name)) playTedStandingIdle(0.14);
+      else {
+        restoreStandingPose(name);
+        characterActions[name] = null;
+      }
     }
     for (const [name, target] of Object.entries(facingTargets)) {
       const root = characterRoots[name];
