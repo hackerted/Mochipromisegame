@@ -621,6 +621,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const reserved = []; // { x, z, r }: trees and decor keep off these
   const obstacles = []; // { x, z, r }: solid for walkers
   const pathLines = []; // { points, halfWidth }
+  const walkableSurfaces = [];
   const pathMaterial = new T.MeshStandardMaterial({ color: '#c8b892', roughness: 0.95, side: T.DoubleSide });
 
   function addPath(name, points, { closed = false, width = 1.8, lift = 0.012, material = pathMaterial, trackClearance = true } = {}) {
@@ -649,9 +650,39 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     mesh.name = name;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    const bounds = samples.reduce((box, point) => ({
+      minX: Math.min(box.minX, point.x), maxX: Math.max(box.maxX, point.x),
+      minZ: Math.min(box.minZ, point.z), maxZ: Math.max(box.maxZ, point.z),
+    }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+    walkableSurfaces.push({ points: samples, halfWidth: width / 2, lift, ...bounds });
     if (trackClearance) pathLines.push({ points: samples, halfWidth: width / 2 });
     return curve;
   }
+  const walkableHeightAt = (x, z) => {
+    let height = parkHeightAt(x, z);
+    for (const surface of walkableSurfaces) {
+      const reach = surface.halfWidth;
+      if (x < surface.minX - reach || x > surface.maxX + reach
+        || z < surface.minZ - reach || z > surface.maxZ + reach) continue;
+      const reachSq = reach * reach;
+      for (let i = 1; i < surface.points.length; i++) {
+        const a = surface.points[i - 1];
+        const b = surface.points[i];
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const lengthSq = dx * dx + dz * dz;
+        const along = lengthSq > 0
+          ? clamp(((x - a.x) * dx + (z - a.z) * dz) / lengthSq, 0, 1) : 0;
+        const offsetX = x - (a.x + dx * along);
+        const offsetZ = z - (a.z + dz * along);
+        if (offsetX * offsetX + offsetZ * offsetZ <= reachSq) {
+          height = Math.max(height, parkHeightAt(x, z) + surface.lift);
+          break;
+        }
+      }
+    }
+    return height;
+  };
   // Distance from a point to the nearest path edge (negative = on the path).
   const distanceToPaths = (x, z) => Math.min(...pathLines.map(({ points, halfWidth }) =>
     Math.min(...points.map((p) => Math.hypot(p.x - x, p.z - z))) - halfWidth));
@@ -1769,7 +1800,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const groundTedDuringStand = () => {
     tedRoot.updateMatrixWorld(true);
     for (const mesh of tedStandMeshes) mesh.skeleton.update();
-    const groundY = family.active ? familyPath.position.y : school.active ? 0 : parkHeightAt(tedRoot.position.x, tedRoot.position.z);
+    const groundY = family.active ? familyPath.position.y : school.active ? 0 : walkableHeightAt(tedRoot.position.x, tedRoot.position.z);
     tedRoot.position.y += groundY - tedStandBounds.setFromObject(tedRoot, true).min.y;
     tedRoot.updateMatrixWorld(true);
   };
@@ -2302,7 +2333,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     root.position.x = clamp(next.x, -movementLimitX, movementLimitX);
     root.position.z = clamp(next.z, minZ, maxZ);
-    root.position.y = school.active ? 0 : parkHeightAt(root.position.x, root.position.z);
+    root.position.y = school.active ? 0 : name === 'Ted'
+      ? walkableHeightAt(root.position.x, root.position.z) : parkHeightAt(root.position.x, root.position.z);
     player.x += root.position.x - oldX;
     player.z += root.position.z - oldZ;
     return true;
@@ -3994,7 +4026,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     updateCafeFamilyScene(dt);
     updateAudition(dt);
     updateHomeJourney();
-    if (walkingCharacters.has('Ted') || characterMode.Ted === 'standingIdle') groundTedDuringStand();
+    if (walkingCharacters.has('Ted') || turningCharacters.has('Ted') || characterMode.Ted === 'standingIdle') groundTedDuringStand();
     if (school.active && walkingCharacters.has('SooAh')) groundSooAhDuringStand();
     if (standRootTransitions.SooAh) groundSooAhDuringStand();
     if (standRootTransitions.Ted) groundTedDuringStand();
