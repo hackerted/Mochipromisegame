@@ -7,6 +7,9 @@ export function buildCafeFurniture(THREE) {
 
   const counterDressing = new THREE.Group();
   counterDressing.name = 'LeeCafeCounterDressing';
+  const room = new THREE.Group();
+  room.name = 'LeeCafeBingsuInterior';
+  room.position.y = -0.012;
 
   const materials = {
     wood: new THREE.MeshStandardMaterial({ color: '#80543a', roughness: 0.78 }),
@@ -22,7 +25,15 @@ export function buildCafeFurniture(THREE) {
     brass: new THREE.MeshStandardMaterial({ color: '#b18a52', roughness: 0.35, metalness: 0.72 }),
     red: new THREE.MeshStandardMaterial({ color: '#c75e4d', roughness: 0.4 }),
     green: new THREE.MeshStandardMaterial({ color: '#8aa56d', roughness: 0.42 }),
+    plaster: new THREE.MeshStandardMaterial({ color: '#e8d9c4', roughness: 0.92 }),
+    wallWood: new THREE.MeshStandardMaterial({ color: '#75513b', roughness: 0.84 }),
+    wallTrim: new THREE.MeshStandardMaterial({ color: '#4e3a2d', roughness: 0.82 }),
+    glass: new THREE.MeshStandardMaterial({ color: '#a7c8c7', roughness: 0.2, metalness: 0.05, transparent: true, opacity: 0.26, depthWrite: false }),
+    fridgeInterior: new THREE.MeshStandardMaterial({ color: '#dce6df', roughness: 0.72 }),
+    berry: new THREE.MeshStandardMaterial({ color: '#c83d4f', roughness: 0.54 }),
+    ice: new THREE.MeshStandardMaterial({ color: '#edf4f2', roughness: 0.2, transparent: true, opacity: 0.82 }),
   };
+  const fridgeGlass = new THREE.MeshBasicMaterial({ color: '#dff1e8', side: THREE.DoubleSide, transparent: true, opacity: 0.18, depthWrite: false });
 
   const addMesh = (parent, name, geometry, material, position, rotation = null) => {
     const mesh = new THREE.Mesh(geometry, material);
@@ -124,10 +135,107 @@ export function buildCafeFurniture(THREE) {
   }
   addMesh(machine, `${machine.name}SteamWand`, new THREE.CylinderGeometry(0.008, 0.01, 0.17, 8), materials.steel, [0.32, 0.11, -0.13], [0.22, 0, 0]);
   addMesh(machine, `${machine.name}SteamTip`, new THREE.SphereGeometry(0.014, 10, 8), materials.brass, [0.34, 0.035, -0.15]);
-  machine.position.set(-0.04, 0.96, 0.34);
+  machine.position.set(-0.84, 0.78, 0.34);
   counterDressing.add(machine);
-  makeCup(counterDressing, 'LeeCafeCounterCupLeft', [-0.78, 0.96, 0.34], materials.cream);
-  makeCup(counterDressing, 'LeeCafeCounterCupRight', [0.78, 0.96, 0.34], materials.sage, false);
+  makeCup(counterDressing, 'LeeCafeCounterCupLeft', [-0.22, 0.78, 0.34], materials.cream);
+  makeCup(counterDressing, 'LeeCafeCounterCupRight', [0.75, 0.78, 0.34], materials.sage, false);
 
-  return { seating, counterDressing };
+  addRoundedBox(room, 'CafeBackWall', [5.8, 3.0, 0.14], 0.025, materials.plaster, [0, 1.5, 2.36]);
+  addRoundedBox(room, 'CafeBackWainscot', [5.8, 0.78, 0.07], 0.015, materials.wallWood, [0, 0.39, 2.25]);
+  addRoundedBox(room, 'CafeBackRail', [5.8, 0.07, 0.09], 0.012, materials.lightWood, [0, 0.81, 2.23]);
+  addRoundedBox(room, 'CafeBackBaseboard', [5.8, 0.10, 0.08], 0.012, materials.wallTrim, [0, 0.05, 2.23]);
+  for (const x of [-2.35, -1.55, -0.75, 0.75, 1.55, 2.35]) {
+    addMesh(room, `CafeBackPanel_${x}`, new THREE.BoxGeometry(0.018, 2.05, 0.028), materials.wallWood, [x, 1.87, 2.27]);
+  }
+  for (const side of [-1, 1]) {
+    addRoundedBox(room, `CafeSideWall_${side}`, [0.14, 3.0, 4.9], 0.02, materials.plaster, [side * 2.83, 1.5, 0]);
+    addRoundedBox(room, `CafeSideWainscot_${side}`, [0.07, 0.78, 4.9], 0.012, materials.wallWood, [side * 2.73, 0.39, 0]);
+    addMesh(room, `CafeSideWindow_${side}`, new THREE.BoxGeometry(0.035, 1.15, 1.25), materials.glass, [side * 2.73, 1.92, 0.42]);
+    for (const z of [-0.23, 1.07]) addMesh(room, `CafeSideWindowFrame_${side}_${z}`, new THREE.BoxGeometry(0.08, 1.25, 0.055), materials.wallWood, [side * 2.70, 1.92, z]);
+    for (const y of [1.32, 2.52]) addMesh(room, `CafeSideWindowRail_${side}_${y}`, new THREE.BoxGeometry(0.08, 0.055, 1.35), materials.wallWood, [side * 2.70, y, 0.42]);
+  }
+
+  const boardCanvas = document.createElement('canvas');
+  boardCanvas.width = 512;
+  boardCanvas.height = 160;
+  const boardContext = boardCanvas.getContext('2d');
+  boardContext.translate(boardCanvas.width, 0);
+  boardContext.scale(-1, 1);
+  boardContext.fillStyle = '#294139';
+  boardContext.fillRect(0, 0, 512, 160);
+  boardContext.strokeStyle = '#c4a370';
+  boardContext.lineWidth = 8;
+  boardContext.strokeRect(6, 6, 500, 148);
+  boardContext.textAlign = 'center';
+  boardContext.fillStyle = '#f2e4cf';
+  boardContext.font = 'bold 34px sans-serif';
+  boardContext.fillText('FRESH BINGSU  ·  COFFEE', 256, 64);
+  boardContext.font = '22px sans-serif';
+  boardContext.fillText('RED BEAN  ·  STRAWBERRY  ·  INJEOLMI', 256, 112);
+  const boardTexture = new THREE.CanvasTexture(boardCanvas);
+  boardTexture.colorSpace = THREE.SRGBColorSpace;
+  addRoundedBox(room, 'BingsuMenuFrame', [1.92, 0.68, 0.06], 0.025, materials.wallTrim, [0, 2.35, 2.24]);
+  const boardFace = new THREE.Mesh(new THREE.PlaneGeometry(1.82, 0.58), new THREE.MeshBasicMaterial({ map: boardTexture, side: THREE.DoubleSide, toneMapped: false }));
+  boardFace.name = 'BingsuMenuBoard';
+  boardFace.position.set(0, 2.35, 2.204);
+  room.add(boardFace);
+
+  const prep = new THREE.Group();
+  prep.name = 'LeeCafePreparationStation';
+  prep.position.set(-2.0, 0, 1.44);
+  addRoundedBox(prep, 'CafePrepCabinet', [1.58, 0.76, 0.58], 0.025, materials.wallWood, [0, 0.38, 0]);
+  addRoundedBox(prep, 'CafePrepSteelTop', [1.68, 0.055, 0.68], 0.02, materials.steel, [0, 0.81, 0]);
+  for (const x of [-0.48, 0.48]) {
+    addRoundedBox(prep, `CafePrepDoor_${x}`, [0.56, 0.57, 0.025], 0.015, materials.lightWood, [x, 0.38, -0.302]);
+    addMesh(prep, `CafePrepHandle_${x}`, new THREE.CylinderGeometry(0.009, 0.009, 0.12, 8), materials.brass, [x + 0.18, 0.4, -0.324], [Math.PI / 2, 0, 0]);
+  }
+  const iceShaver = new THREE.Group();
+  iceShaver.name = 'BingsuIceShaver';
+  iceShaver.position.set(-0.48, 0.84, 0.02);
+  addRoundedBox(iceShaver, 'IceShaverBody', [0.42, 0.42, 0.38], 0.035, materials.steel, [0, 0.21, 0]);
+  addRoundedBox(iceShaver, 'IceShaverFront', [0.30, 0.20, 0.025], 0.018, materials.panel, [0, 0.22, -0.204]);
+  addMesh(iceShaver, 'IceShaverHopper', new THREE.CylinderGeometry(0.12, 0.10, 0.16, 20), materials.cream, [0, 0.50, 0]);
+  addMesh(iceShaver, 'IceShaverHopperLid', new THREE.CylinderGeometry(0.125, 0.125, 0.018, 20), materials.wallTrim, [0, 0.59, 0]);
+  addMesh(iceShaver, 'IceShaverSpout', new THREE.CylinderGeometry(0.028, 0.028, 0.12, 12), materials.steel, [0.11, 0.09, -0.22], [Math.PI / 2, 0, -0.25]);
+  const shavedIceBowl = new THREE.Group();
+  shavedIceBowl.name = 'ShavedIceBowl';
+  addMesh(shavedIceBowl, 'ShavedIceBowlDish', new THREE.CylinderGeometry(0.14, 0.10, 0.06, 18), materials.steel, [0, 0.03, 0]);
+  addMesh(shavedIceBowl, 'ShavedIceMound', new THREE.SphereGeometry(0.095, 16, 10), materials.ice, [0, 0.105, 0]);
+  shavedIceBowl.position.set(-0.28, 0.84, -0.24);
+  prep.add(iceShaver, shavedIceBowl);
+  const hob = new THREE.Group();
+  hob.name = 'CafeInductionHob';
+  hob.position.set(0.43, 0.84, 0.02);
+  addRoundedBox(hob, 'InductionHobTop', [0.44, 0.025, 0.38], 0.025, materials.panel, [0, 0, 0]);
+  addMesh(hob, 'InductionHobRing', new THREE.TorusGeometry(0.12, 0.008, 6, 24), materials.red, [0, 0.016, 0], [Math.PI / 2, 0, 0]);
+  const pot = new THREE.Group();
+  pot.name = 'CafeCookingPot';
+  addMesh(pot, 'CookingPotBody', new THREE.CylinderGeometry(0.095, 0.085, 0.13, 18), materials.steel, [0, 0.09, 0]);
+  addMesh(pot, 'CookingPotLid', new THREE.CylinderGeometry(0.092, 0.092, 0.018, 18), materials.metal, [0, 0.164, 0]);
+  addMesh(pot, 'CookingPotKnob', new THREE.SphereGeometry(0.018, 10, 8), materials.darkWood, [0, 0.185, 0]);
+  pot.position.set(0.43, 0.835, 0.02);
+  prep.add(hob, pot);
+  room.add(prep);
+
+  const fridge = new THREE.Group();
+  fridge.name = 'BingsuIngredientFridge';
+  fridge.position.set(2.08, 0, 1.56);
+  addRoundedBox(fridge, 'IngredientFridgeShell', [0.76, 1.88, 0.62], 0.025, materials.steel, [0, 0.94, 0]);
+  addRoundedBox(fridge, 'IngredientFridgeInterior', [0.61, 1.68, 0.025], 0.015, materials.fridgeInterior, [0, 0.94, 0.285]);
+  addMesh(fridge, 'IngredientFridgeDoorGlass', new THREE.BoxGeometry(0.63, 1.66, 0.018), fridgeGlass, [0, 0.94, -0.322]);
+  for (const y of [0.46, 0.86, 1.26, 1.64]) {
+    addMesh(fridge, `IngredientFridgeShelf_${y}`, new THREE.BoxGeometry(0.56, 0.018, 0.43), materials.steel, [0, y, -0.05]);
+  }
+  addMesh(fridge, 'IngredientFridgeHandle', new THREE.CylinderGeometry(0.012, 0.012, 0.72, 8), materials.brass, [0.27, 0.97, -0.344]);
+  for (const [i, color] of [materials.berry, materials.green, materials.cream].entries()) {
+    const rowY = [0.57, 0.97, 1.37][i];
+    addMesh(fridge, `BingsuToppingBowl_${i}`, new THREE.CylinderGeometry(0.12, 0.09, 0.06, 16), materials.cream, [-0.13, rowY, -0.08]);
+    for (let berry = 0; berry < 4; berry++) {
+      addMesh(fridge, `BingsuTopping_${i}_${berry}`, new THREE.SphereGeometry(0.025, 8, 6), color, [-0.19 + berry * 0.04, rowY + 0.055, -0.08]);
+    }
+  }
+  addRoundedBox(fridge, 'IngredientFridgeNameplate', [0.50, 0.13, 0.025], 0.015, materials.wallTrim, [0, 1.81, -0.327]);
+  room.add(fridge);
+
+  return { seating, counterDressing, room };
 }

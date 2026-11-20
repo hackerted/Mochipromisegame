@@ -525,6 +525,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       cafeExteriorVisibility = cafeExteriorNodes.map((name) => cafeRoot.getObjectByName(name))
         .filter(Boolean).map((node) => [node, node.visible]);
       for (const [node] of cafeExteriorVisibility) node.visible = false;
+      cafeRoot.visible = false;
       cafeRoot.position.set(0, 0, 0);
       cafeRoot.rotation.set(0, 0, 0);
       cafeRoot.scale.setScalar(3);
@@ -537,6 +538,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     for (const [node, visible] of cafeExteriorVisibility) node.visible = visible;
     cafeExteriorVisibility = [];
+    cafeRoot.visible = true;
     cafeRoot.position.copy(cafeStreetTransform.position);
     cafeRoot.rotation.copy(cafeStreetTransform.rotation);
     cafeRoot.scale.copy(cafeStreetTransform.scale);
@@ -558,16 +560,17 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   familyScene.add(cafeInteriorFloor);
   const cafeCounter = new T.Group();
   cafeCounter.name = 'LeeCafeCounter';
-  const cafeCounterBody = new T.Mesh(new T.BoxGeometry(2.35, 0.86, 0.64), new T.MeshStandardMaterial({ color: '#765039', roughness: 0.82 }));
-  cafeCounterBody.position.set(0, 0.43, 0.34);
+  const cafeCounterBody = new T.Mesh(new T.BoxGeometry(2.35, 0.68, 0.64), new T.MeshStandardMaterial({ color: '#765039', roughness: 0.82 }));
+  cafeCounterBody.position.set(0, 0.34, 0.34);
   cafeCounterBody.name = 'LeeCafeCounterBody';
   const cafeCounterTop = new T.Mesh(new T.BoxGeometry(2.48, 0.1, 0.72), new T.MeshStandardMaterial({ color: '#b88759', roughness: 0.7 }));
-  cafeCounterTop.position.set(0, 0.91, 0.34);
+  cafeCounterTop.position.set(0, 0.73, 0.34);
   cafeCounterTop.name = 'LeeCafeCounterTop';
   const cafeFurniture = buildCafeFurniture(T);
   setShadows(cafeFurniture.seating);
+  setShadows(cafeFurniture.room);
   cafeCounter.add(cafeFurniture.counterDressing);
-  familyScene.add(cafeFurniture.seating);
+  familyScene.add(cafeFurniture.seating, cafeFurniture.room);
   cafeCounter.add(cafeCounterBody, cafeCounterTop);
   cafeCounter.traverse((node) => { if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; } });
   cafeCounter.position.z = 0.18;
