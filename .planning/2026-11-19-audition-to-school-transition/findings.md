@@ -62,6 +62,7 @@
 - The first optional stop is on the south park path at `(0, -16)`; the second is near the west side of the loop at `(-8, 3)`. Each is marked complete when started and cannot repeat.
 - The first browser pass showed an over-wide gap after turns. The player now pauses only when input would increase separation beyond 2.2 m, while the follower targets a small side-and-back offset and uses the existing turn/walk/run clips.
 - The minimap draws the player, the remaining route, and a `C` destination marker using the same world coordinates as the scene.
+- The regular home objective previously drew a straight minimap line through the pond. Its route now follows the existing east/west loop and north path instead.
 
 ## Cafe Result Scene Findings
 - The existing `assets/props/opt/korean_cafe.glb` is a small two-storey bakery/cafe model with a front door, bakery signage and upper floor. It has no working counter furniture or interior staging; the scene now moves this same cafe root indoors and adds only a counter, cups and floor.

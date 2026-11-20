@@ -63,6 +63,7 @@ Phase 9: The audition result at Lee’s Cafe — complete
 - [x] Add walk/turn/run following with spacing control and a two-character follow camera
 - [x] Add the two once-only optional conversation stops
 - [x] Show the cafe route, player marker and cafe goal on the minimap; gate F entry on both characters reaching the entrance
+- [x] Route the preceding home objective around the pond using the existing loop path
 - [x] Browser-check the Ted route handoff, street crossing, camera framing, companion follow and first conversation
 - [ ] Verify the second conversation and cafe-entry prompt in the browser
 - **Status:** implementation complete; the second optional route conversation remains unverified in the browser

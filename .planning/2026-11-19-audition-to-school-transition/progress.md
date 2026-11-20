@@ -65,6 +65,8 @@
 - Added the follower controller with existing turn, walk and run clips, a paired follow camera, a 2.2 m separation limit, optional one-time conversations, a cafe marker/route on the minimap, and F entry only after both reach the entrance.
 - Browser v337 followed the Ted-selected route through audition success and the school conversation; the cafe objective and minimap appeared at the south crossing. Arrow movement crossed the road with both characters visible, and the one-time first conversation displayed Soo-ah’s nervous line and Ted’s reassurance.
 - `node --check --input-type=module < src/scene.js` and `git diff --check` passed.
+- Under the normal Ted route (without debug start), verified standing, arrow movement, mochi pickup and handoff after moving out of Mr. Lee’s sight, the eating line, and the bench conversation. The home map had routed straight through the pond, so it now uses the existing loop path; the debug home-route view shows the detour.
+- The full normal audition-to-cafe journey for both playable characters is still not verified end to end; the Cafe story branch and controls were separately exercised in the browser.
 - **Remaining browser check:** second conversation and arriving at the cafe entrance to verify the F handoff into the existing family scene.
 
 ## Session: 2026-11-19 — The audition result at Lee’s Cafe

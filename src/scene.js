@@ -1452,6 +1452,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     Ted: { x: -18, z: 33.8, label: 'Ted’s home', marker: 'T' },
     SooAh: { x: 18, z: 33.8, label: 'Soo-ah’s home', marker: 'S' },
   };
+  const homeRouteNodes = {
+    Ted: [
+      { x: 0, z: 2.3 }, { x: -6.5, z: 3.2 }, { x: -11, z: 7 }, { x: -11.5, z: 12.5 },
+      { x: -7, z: 16.5 }, { x: 0, z: 17.5 }, { x: 0, z: 20.5 }, { x: 0, z: 24.7 },
+      { x: 0, z: 31.2 }, { x: 0, z: 33.1 }, homeDestinations.Ted,
+    ],
+    SooAh: [
+      { x: 0, z: 2.3 }, { x: 6.5, z: 3.2 }, { x: 11, z: 7 }, { x: 11.5, z: 12.5 },
+      { x: 7, z: 16.5 }, { x: 0, z: 17.5 }, { x: 0, z: 20.5 }, { x: 0, z: 24.7 },
+      { x: 0, z: 31.2 }, { x: 0, z: 33.1 }, homeDestinations.SooAh,
+    ],
+  };
   const journey = { active: false, phase: 'none', destination: null };
   const school = { active: false, phase: 'inactive', dialogueIndex: 0, auditionPassed: false, arrived: 0 };
   const cafeJourney = {
@@ -3348,11 +3360,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     if (!journey.active) return { visible: false };
     const root = characterRoots[selectedCharacter];
-    const route = [];
+    let route = [];
     if (journey.phase === 'to-home') {
-      if (root.position.z < 20.5 && Math.abs(root.position.x) < 9) route.push({ x: 0, z: 20.5 });
-      if (root.position.z < 33.1 && Math.abs(root.position.x) < 9) route.push({ x: 0, z: 33.1 });
-      route.push(journey.destination);
+      const nodes = homeRouteNodes[selectedCharacter];
+      let closest = 0;
+      let nearest = Infinity;
+      for (let i = 0; i < nodes.length; i++) {
+        const distance = Math.hypot(root.position.x - nodes[i].x, root.position.z - nodes[i].z);
+        if (distance < nearest) { nearest = distance; closest = i; }
+      }
+      route = nodes.slice(closest);
     }
     return {
       visible: true,
