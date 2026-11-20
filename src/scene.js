@@ -219,12 +219,23 @@ function mirrorClip(clip) {
   return mirrored;
 }
 
-function inPlaceTurn(clip) {
+function inPlaceTurn(clip, standingIdle = null) {
   if (!clip) return clip;
   const adjusted = clip.clone();
-  // Turn clips carry pelvis yaw; the controller applies that measured yaw to the actor root instead.
+  // The controller owns pelvis yaw; hold the standing height so turns do not fall back to bind pose.
   adjusted.tracks = adjusted.tracks.filter((track) =>
     !track.name.toLowerCase().split('.')[0].replace(/[^a-z]/g, '').endsWith('mixamorighips'));
+  const hipsPosition = standingIdle?.tracks.find((track) => track.name.toLowerCase().endsWith('.position')
+    && track.name.slice(0, -'.position'.length).toLowerCase().replace(/[^a-z]/g, '').endsWith('mixamorighips'));
+  if (hipsPosition) {
+    const size = hipsPosition.getValueSize();
+    const pose = hipsPosition.values.slice(hipsPosition.values.length - size);
+    adjusted.tracks.push(new THREE.VectorKeyframeTrack(
+      hipsPosition.name,
+      new Float32Array([0, adjusted.duration]),
+      new Float32Array([...pose, ...pose]),
+    ));
+  }
   return adjusted;
 }
 
@@ -1228,8 +1239,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (name === 'SooAhLookBehindRun') lookBehindRunClip = inPlaceFbxWalk(clip);
     if (name === 'SooAhTurnLeft') { turnClips.SooAh.left = inPlaceTurn(clip); turnAngles.SooAh.left = measuredTurnAngle(clip); }
     if (name === 'SooAhTurnRight') { turnClips.SooAh.right = inPlaceTurn(clip); turnAngles.SooAh.right = measuredTurnAngle(clip); }
-    if (name === 'TedTurnLeft') { turnClips.Ted.left = inPlaceTurn(clip); turnAngles.Ted.left = measuredTurnAngle(clip); }
-    if (name === 'TedTurnRight') { turnClips.Ted.right = inPlaceTurn(clip); turnAngles.Ted.right = measuredTurnAngle(clip); }
+    if (name === 'TedTurnLeft') { turnClips.Ted.left = inPlaceTurn(clip, tedStandingIdle); turnAngles.Ted.left = measuredTurnAngle(clip); }
+    if (name === 'TedTurnRight') { turnClips.Ted.right = inPlaceTurn(clip, tedStandingIdle); turnAngles.Ted.right = measuredTurnAngle(clip); }
     if (name === 'TedSitting') sittingClips.Ted = clip;
     // Pin hip drift but keep its seated height (stripping the hips track floated her to standing
     // height). Processed once here so repeated F presses reuse the same clip.
