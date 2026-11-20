@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { buildAuditionStage } from './audition-stage.js';
+import { buildCafeFurniture } from './cafe-furniture.js';
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const sooAhStandSpeed = 4;
@@ -563,13 +564,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const cafeCounterTop = new T.Mesh(new T.BoxGeometry(2.48, 0.1, 0.72), new T.MeshStandardMaterial({ color: '#b88759', roughness: 0.7 }));
   cafeCounterTop.position.set(0, 0.91, 0.34);
   cafeCounterTop.name = 'LeeCafeCounterTop';
-  const cafeCupMaterial = new T.MeshStandardMaterial({ color: '#f0e7d6', roughness: 0.38 });
-  for (const x of [-0.7, 0.7]) {
-    const cup = new T.Mesh(new T.CylinderGeometry(0.055, 0.045, 0.12, 12), cafeCupMaterial);
-    cup.position.set(x, 1.02, 0.34);
-    cup.name = `LeeCafeCup${x < 0 ? 'Left' : 'Right'}`;
-    cafeCounter.add(cup);
-  }
+  const cafeFurniture = buildCafeFurniture(T);
+  setShadows(cafeFurniture.seating);
+  cafeCounter.add(cafeFurniture.counterDressing);
+  familyScene.add(cafeFurniture.seating);
   cafeCounter.add(cafeCounterBody, cafeCounterTop);
   cafeCounter.traverse((node) => { if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; } });
   cafeCounter.position.z = 0.18;
