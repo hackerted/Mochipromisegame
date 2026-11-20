@@ -1133,7 +1133,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const tedSeatPointWorld = new T.Vector3();
   const tedSitPositionLocal = new T.Vector3();
   let tedSeatedPelvisReady = false;
-  const tedSeatTopLocalY = () => tedSeatCollider.position.y + tedSeatCollider.userData.halfExtents[1] + 0.10;
+  const tedSeatTopLocalY = () => tedSeatCollider.position.y + tedSeatCollider.userData.halfExtents[1] + 0.086;
   const tedSeatTargetWorldY = () => {
     bench.updateMatrixWorld(true);
     tedSeatPointLocal.set(tedSeatCollider.position.x, tedSeatTopLocalY(), tedSeatCollider.position.z);
@@ -3811,8 +3811,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     const tedSitStart = name === 'Ted' ? getCharacterSeatState('Ted') : null;
     if (name === 'SooAh') {
-      characterRoots[name].position.y += 0.04;
-      sitClearance[name] = { y: 0.04, z: 0 };
+      characterRoots[name].position.y += 0.026;
+      sitClearance[name] = { y: 0.026, z: 0 };
     }
     if (name === 'Ted') {
       sitClearance[name] = { y: 0, z: 0 };
