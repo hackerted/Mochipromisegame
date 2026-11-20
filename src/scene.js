@@ -4,6 +4,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { buildAuditionStage } from './audition-stage.js';
 import { buildCafeFurniture } from './cafe-furniture.js';
+import { buildSchoolCourtyard } from './school-courtyard.js';
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const sooAhStandSpeed = 4;
@@ -394,6 +395,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   schoolBuilding.position.set(-schoolCenter.x * schoolScale, -schoolBounds.min.y * schoolScale, schoolMapZ - 10 - schoolCenter.z * schoolScale);
   setShadows(schoolBuilding);
   schoolScene.add(schoolBuilding);
+  const schoolWorldBounds = new T.Box3().setFromObject(schoolBuilding);
+  const schoolCourtyardDressing = buildSchoolCourtyard(T, {
+    frontZ: schoolWorldBounds.max.z,
+    mapZ: schoolMapZ,
+    benchAsset: chairAsset.scene,
+    treeAsset: cherryTreeAsset.scene,
+  });
+  setShadows(schoolCourtyardDressing);
+  schoolScene.add(schoolCourtyardDressing);
   const familyGround = new T.Mesh(new T.PlaneGeometry(28, 28), new T.MeshStandardMaterial({ color: '#91a16f', roughness: 1 }));
   familyGround.name = 'LeeHomeGarden';
   familyGround.rotation.x = -Math.PI / 2;
@@ -2226,9 +2236,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const speed = fast ? 4.8 : 3.1;
     const dx = (-Math.sin(player.yaw) * forward + Math.cos(player.yaw) * strafe) * speed * dt;
     const dz = (-Math.cos(player.yaw) * forward - Math.sin(player.yaw) * strafe) * speed * dt;
-    const nx = clamp(player.x + dx, -parkLimit, parkLimit);
-    const nz = clamp(player.z + dz, -parkLimit, parkLimit);
-    const nearChair = Math.hypot(nx, nz - 0.17) < 0.75;
+    const limitX = school.active ? 34 : parkLimit;
+    const minZ = school.active ? schoolMapZ - 34 : -parkLimit;
+    const maxZ = school.active ? schoolMapZ + 34 : parkLimit;
+    const nx = clamp(player.x + dx, -limitX, limitX);
+    const nz = clamp(player.z + dz, minZ, maxZ);
+    const nearChair = !school.active && Math.hypot(nx, nz - 0.17) < 0.75;
     player.x = nx;
     player.z = nearChair ? nz + (nz < 0.17 ? -1 : 1) * 0.05 : nz;
   }
@@ -2977,10 +2990,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       delete turnStates[name];
       delete facingTargets[name];
       sittingTalkTimers[name] = 0;
-      characterMode[name] = 'standingUp';
+      characterMode[name] = name === 'Ted' ? 'standingIdle' : 'standingUp';
       sitClearance[name] = { y: 0, z: 0 };
-      mixer.stopAllAction();
-      mixer.update(0);
       if (standFinishHandlers[name]) {
         mixer.removeEventListener('finished', standFinishHandlers[name]);
         delete standFinishHandlers[name];
@@ -2989,6 +3000,18 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mixer.removeEventListener('finished', sitFinishHandlers[name]);
         delete sitFinishHandlers[name];
       }
+      delete standRootTransitions[name];
+      if (name === 'Ted') {
+        // Ted is already standing after the audition; school arrival only resets his idle pose.
+        playTedStandingIdle(0);
+        mixer.update(0);
+        groundTedDuringStand();
+        saveStandingPose(name);
+        completeArrival(name);
+        continue;
+      }
+      mixer.stopAllAction();
+      mixer.update(0);
       const action = playClip(name, sitToStandClips[name], { loop: false, fade: 0.12 });
       if (!action) {
         completeArrival(name);
