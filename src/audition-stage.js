@@ -73,17 +73,17 @@ export function buildAuditionStage(THREE) {
   }
 
   box('Audition_JudgeFloor', [14, 0.08, 2.8], [0, 0.38, -3.9], woodEdge);
-  box('Audition_JudgeDeskTop', [9.6, 0.14, 0.92], [0, 1.03, -3.15], judgeDeskMat);
-  box('Audition_JudgeDeskFront', [9.2, 0.20, 0.16], [0, 0.86, -2.69], judgeDeskMat);
-  box('Audition_JudgeDeskGoldTrim', [9.25, 0.045, 0.19], [0, 0.98, -2.57], trimMat);
-  box('Audition_JudgeDeskNameplate', [2.0, 0.14, 0.05], [0, 0.86, -2.56], trimMat);
-  for (const x of [-4.2, 4.2]) {
+  box('Audition_JudgeDeskTop', [3.0, 0.14, 0.92], [-1.3, 1.03, -3.15], judgeDeskMat);
+  box('Audition_JudgeDeskFront', [2.9, 0.20, 0.16], [-1.3, 0.86, -2.69], judgeDeskMat);
+  box('Audition_JudgeDeskGoldTrim', [2.95, 0.045, 0.19], [-1.3, 0.98, -2.57], trimMat);
+  box('Audition_JudgeDeskNameplate', [0.9, 0.14, 0.05], [-1.3, 0.86, -2.56], trimMat);
+  for (const x of [-2.55, -0.05]) {
     box(`Audition_JudgeDeskPedestal_${x}`, [0.32, 0.54, 0.72], [x, 0.69, -3.15], judgeDeskMat);
   }
-  for (const [index, x] of [-3.2, 0, 3.2].entries()) {
-    box(`Audition_JudgeChairSeat_${index + 1}`, [1.05, 0.12, 0.88], [x, 0.85, -4.0], judgeChairMat);
-    box(`Audition_JudgeChairBack_${index + 1}`, [1.05, 0.92, 0.14], [x, 1.32, -4.43], judgeChairMat);
-    for (const sideX of [-0.42, 0.42]) {
+  for (const [index, x] of [-2.2, -1.3, -0.4].entries()) {
+    box(`Audition_JudgeChairSeat_${index + 1}`, [0.88, 0.12, 0.88], [x, 0.85, -4.0], judgeChairMat);
+    box(`Audition_JudgeChairBack_${index + 1}`, [0.88, 0.92, 0.14], [x, 1.32, -4.43], judgeChairMat);
+    for (const sideX of [-0.34, 0.34]) {
       for (const sideZ of [-0.32, 0.32]) {
         box(`Audition_JudgeChairLeg_${index + 1}_${sideX}_${sideZ}`, [0.07, 0.37, 0.07], [x + sideX, 0.605, -4.0 + sideZ], judgeChairMat);
       }

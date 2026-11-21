@@ -1327,21 +1327,40 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     'SooAhStepHipHop', 'SooAhAuditionSinging', 'SooAhAuditionWalk', 'SooAhAuditionIdle', 'SooAhVictory',
   ];
   const auditionJudgeSources = [
-    { title: 'Gen-1 Idol', file: './assets/characters/audition/judges/nova-judge-gen1-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-gen1-idol.png' },
-    { title: 'Age 22 Judge', file: './assets/characters/audition/judges/nova-judge-22-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-age22.png' },
-    { title: 'Senior Judge', file: './assets/characters/audition/judges/nova-judge-senior-sitting-idle.fbx', texture: './assets/textures/audition/nova-judge-senior.png' },
+    {
+      title: 'Gen-1 Idol',
+      file: './assets/characters/audition/judges/nova-judge-gen1-sitting-idle.fbx',
+      texture: './assets/textures/audition/nova-judge-gen1-idol.png',
+      talk: './assets/animations/audition/judge-gen1Talk.json',
+      approval: './assets/animations/audition/judge-gen1Approval.json',
+    },
+    {
+      title: 'Age 22 Judge',
+      file: './assets/characters/audition/judges/nova-judge-22-sitting-idle.fbx',
+      texture: './assets/textures/audition/nova-judge-age22.png',
+      talk: './assets/animations/audition/judge-age22Talk.json',
+      approval: './assets/animations/audition/judge-age22Approval.json',
+    },
+    {
+      title: 'Senior Judge',
+      file: './assets/characters/audition/judges/nova-judge-senior-sitting-idle.fbx',
+      texture: './assets/textures/audition/nova-judge-senior.png',
+      talk: './assets/animations/audition/judge-seniorTalk.json',
+      approval: './assets/animations/audition/judge-seniorApproval.json',
+    },
   ];
   async function loadAuditionAssets() {
     if (auditionLoadPromise) return auditionLoadPromise;
     auditionLoadPromise = (async () => {
       const clipsReady = Promise.all(auditionClipNames.map(ensureClip));
-      const [performers, judgeAssets, judgeTextures] = await Promise.all([
+      const [performers, judgeAssets, judgeTextures, judgeMotions] = await Promise.all([
         Promise.all([
           gltf(gltfLoader, './assets/characters/audition/ted-kpop-stage.glb'),
           gltf(gltfLoader, './assets/characters/audition/soo-ah-kpop-stage.glb'),
         ]),
         Promise.all(auditionJudgeSources.map(({ file }) => fbxLoader.loadAsync(file))),
         Promise.all(auditionJudgeSources.map(({ texture }) => textureLoader.loadAsync(texture))),
+        Promise.all(auditionJudgeSources.map(({ talk, approval }) => Promise.all([loadJsonClip(talk), loadJsonClip(approval)]))),
         clipsReady,
       ]);
       const [tedAsset, sooAhAsset] = performers;
@@ -1357,35 +1376,57 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mixers.push(auditionMixers[name]);
       }
       const compactJudges = camera.aspect < 0.85;
-      const judgeXs = compactJudges ? [-1.7, -0.55, 1.7] : [-2.0, -0.6, 2.6];
+      const judgeXs = compactJudges ? [-1.8, -0.9, 0] : [-2.2, -1.3, -0.4];
+      const originalJudgeXs = [-2.2, -1.3, -0.4];
       for (let index = 0; index < judgeXs.length; index++) {
+        const offset = judgeXs[index] - originalJudgeXs[index];
         auditionStage.getObjectByName(`Audition_JudgeChairSeat_${index + 1}`).position.x = judgeXs[index];
         auditionStage.getObjectByName(`Audition_JudgeChairBack_${index + 1}`).position.x = judgeXs[index];
+        for (const leg of auditionStage.children.filter((child) => child.name.startsWith(`Audition_JudgeChairLeg_${index + 1}_`))) {
+          leg.position.x += offset;
+        }
       }
       if (compactJudges) {
-        auditionStage.getObjectByName('Audition_JudgeDeskTop').scale.x = 0.58;
-        auditionStage.getObjectByName('Audition_JudgeDeskFront').scale.x = 0.58;
-        auditionStage.getObjectByName('Audition_JudgeDeskGoldTrim').scale.x = 0.58;
-        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_-4.2').position.x = -2.35;
-        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_4.2').position.x = 2.35;
+        for (const name of ['Audition_JudgeDeskTop', 'Audition_JudgeDeskFront', 'Audition_JudgeDeskGoldTrim']) {
+          const deskPart = auditionStage.getObjectByName(name);
+          deskPart.scale.x = 0.78;
+          deskPart.position.x = -0.9;
+        }
+        auditionStage.getObjectByName('Audition_JudgeDeskNameplate').position.x = -0.9;
+        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_-2.55').position.x = -2.15;
+        auditionStage.getObjectByName('Audition_JudgeDeskPedestal_-0.05').position.x = 0.35;
       }
       for (const [index, asset] of judgeAssets.entries()) {
         const source = auditionJudgeSources[index];
         const clip = asset.animations?.[0];
+        const [talkClip, approvalClip] = judgeMotions[index];
         if (!clip) throw new Error(`No seated animation in ${source.file}`);
         applyCharacterTexture(asset, judgeTextures[index], maxAnisotropy, true);
         fitToHeight(asset, 1.48);
         asset.name = `NOVAJudge_${source.title.replaceAll(' ', '')}`;
         asset.visible = false;
-        asset.position.set(judgeXs[index], auditionStageTop + 0.04, -4.0);
         asset.rotation.y = 0;
+        asset.updateMatrixWorld(true);
+        const judgeBounds = new T.Box3().setFromObject(asset);
+        const judgeCenter = judgeBounds.getCenter(new T.Vector3());
+        asset.position.x += judgeXs[index] - judgeCenter.x;
+        asset.position.y += auditionStageTop + 0.04;
+        asset.position.z += -4.0 - judgeCenter.z;
         setShadows(asset);
         auditionScene.add(asset);
         const mixer = new T.AnimationMixer(asset);
         const action = mixer.clipAction(clip);
         action.setLoop(T.LoopRepeat, Infinity).play();
         mixers.push(mixer);
-        auditionJudges.push({ root: asset, title: source.title });
+        auditionJudges.push({
+          root: asset,
+          title: source.title,
+          mixer,
+          idleClip: clip,
+          talkClip: inPlaceSit(talkClip),
+          approvalClip: inPlaceSit(approvalClip),
+          action,
+        });
       }
       for (const name of auditionClipNames) auditionClips[name] = inPlaceFbxWalk(clips[name]);
       characterRoots.Ted = auditionRoots.Ted;
@@ -1708,6 +1749,10 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     run: 0,
     autoSection: 0,
     walking: false,
+    judgeConversation: null,
+    judgeTurnBack: null,
+    judgeTalkCooldown: 0.8,
+    judgeTalkPair: 0,
     figureTransition: null,
     tedExit: null,
     tedThumbTurn: null,
@@ -2455,6 +2500,74 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (line) message = line;
   }
 
+  const judgeTalkPhases = new Set(['ted-singing', 'ted-dance', 'sooah-auto', 'sooah-qte', 'sooah-finale']);
+  const playJudgeClip = (judge, clip, { loop = false, speed = 1, fade = 0.2 } = {}) => {
+    if (!judge || !clip) return null;
+    const previous = judge.action;
+    if (previous?.getClip() === clip && previous.isRunning()) return previous;
+    const action = judge.mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(loop ? T.LoopRepeat : T.LoopOnce, loop ? Infinity : 1);
+    action.clampWhenFinished = !loop;
+    action.timeScale = speed;
+    if (previous && previous !== action) previous.fadeOut(fade);
+    action.fadeIn(fade).play();
+    judge.action = action;
+    return action;
+  };
+
+  function stopJudgeConversation() {
+    const conversation = audition.judgeConversation;
+    if (!conversation) return;
+    for (const index of conversation.indices) {
+      playJudgeClip(auditionJudges[index], auditionJudges[index].idleClip, { loop: true });
+    }
+    audition.judgeTurnBack = conversation.indices;
+    audition.judgeConversation = null;
+  }
+
+  function startJudgeConversation() {
+    const indices = audition.judgeTalkPair % 2 === 0 ? [0, 1] : [1, 2];
+    audition.judgeTalkPair = (audition.judgeTalkPair + 1) % 2;
+    for (const index of indices) playJudgeClip(auditionJudges[index], auditionJudges[index].talkClip, { loop: true, speed: 1.05 });
+    audition.judgeConversation = { indices, remaining: 1.25 };
+  }
+
+  function updateJudgeConversation(dt) {
+    const conversation = audition.judgeConversation;
+    if (conversation) {
+      conversation.remaining -= dt;
+      const [firstIndex, secondIndex] = conversation.indices;
+      for (const [index, otherIndex] of [[firstIndex, secondIndex], [secondIndex, firstIndex]]) {
+        const root = auditionJudges[index].root;
+        const other = auditionJudges[otherIndex].root;
+        const targetYaw = Math.atan2(other.position.x - root.position.x, other.position.z - root.position.z);
+        root.rotation.y += wrapAngle(targetYaw - root.rotation.y) * Math.min(1, dt * 5);
+      }
+      if (conversation.remaining <= 0) {
+        stopJudgeConversation();
+        audition.judgeTalkCooldown = 0.2;
+      }
+      return;
+    }
+    if (audition.judgeTurnBack) {
+      audition.judgeTurnBack = audition.judgeTurnBack.filter((index) => {
+        const root = auditionJudges[index].root;
+        const turn = wrapAngle(-root.rotation.y);
+        if (Math.abs(turn) < 0.02) {
+          root.rotation.y = 0;
+          return false;
+        }
+        root.rotation.y += turn * Math.min(1, dt * 5);
+        return true;
+      });
+      if (!audition.judgeTurnBack.length) audition.judgeTurnBack = null;
+    }
+    if (!judgeTalkPhases.has(audition.phase) || auditionJudges.length < 3) return;
+    audition.judgeTalkCooldown -= dt;
+    if (audition.judgeTalkCooldown <= 0) startJudgeConversation();
+  }
+
   function placeTedFigure() {
     tedAuditionFigure.visible = true;
     if (tedAuditionFigure.parent !== auditionStage) auditionStage.attach(tedAuditionFigure);
@@ -2475,6 +2588,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function beginTedDance() {
+    audition.judgeTalkPair = 1;
+    audition.judgeTalkCooldown = 0.2;
     placeTedFigure();
     setAuditionPhase('ted-dance', 'Ted', 'TedGangnamStyle', {
       speed: 2.35,
@@ -2577,6 +2692,12 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function beginJudgesReaction() {
+    stopJudgeConversation();
+    audition.judgeTurnBack = null;
+    for (const [index, judge] of auditionJudges.entries()) {
+      judge.root.rotation.y = 0;
+      playJudgeClip(judge, judge.approvalClip, { loop: true, speed: index === 2 ? 0.9 : 1.1, fade: 0.18 });
+    }
     audition.passed = true;
     school.auditionPassed = true;
     audition.phase = 'judges-reaction';
@@ -2634,6 +2755,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function startSooAhAutoPerformance() {
     audition.score = 8;
+    audition.judgeTalkPair = 0;
+    audition.judgeTalkCooldown = 0.1;
     focusSooAhPerformance();
     startSooAhAutoSection(0);
   }
@@ -2682,6 +2805,8 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   }
 
   function startSooAhQte() {
+    audition.judgeTalkPair = 0;
+    audition.judgeTalkCooldown = 0.1;
     focusSooAhPerformance();
     audition.phase = 'sooah-qte';
     audition.elapsed = 0;
@@ -2716,6 +2841,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       audition.pending = false;
       audition.active = true;
       audition.run++;
+      audition.judgeConversation = null;
+      audition.judgeTurnBack = null;
+      audition.judgeTalkCooldown = 0.8;
+      audition.judgeTalkPair = 0;
+      for (const judge of auditionJudges) {
+        judge.root.rotation.y = 0;
+        playJudgeClip(judge, judge.idleClip, { loop: true, fade: 0 });
+      }
       auditionStage.visible = true;
       for (const judge of auditionJudges) judge.root.visible = true;
       parkCharacterRoots.Ted.visible = false;
@@ -2835,6 +2968,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function updateAudition(dt) {
     if (!audition.active) return;
+    updateJudgeConversation(dt);
     if (audition.tedReturn) {
       const returnState = audition.tedReturn;
       returnState.elapsed = Math.min(returnState.duration, returnState.elapsed + dt);
