@@ -1425,7 +1425,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const emotionalStates = {};
   const sittingTalkTimers = { SooAh: 0, Ted: 0 };
   let lookBehindRun = false;
-  const sittingCharacters = new Set(['SooAh']);
+  const sittingCharacters = new Set(['SooAh', 'Ted']);
   const playClip = (name, clip, { loop = false, fade = 0.16 } = {}) => {
     const mixer = characterMixers[name];
     if (!mixer || !clip) return null;
@@ -1787,7 +1787,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
   };
   const sitClearance = { SooAh: { y: 0.04, z: 0 }, Ted: { y: 0, z: 0.12 } };
-  const characterMode = { SooAh: 'sitting', Ted: 'standingIdle' };
+  const characterMode = { SooAh: 'sitting', Ted: 'sitting' };
   const standingReady = new Set();
   const walkingCharacters = new Set();
   const movementModes = {};
@@ -1831,15 +1831,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     tedRoot.position.y += groundY - tedStandBounds.setFromObject(tedRoot, true).min.y;
     tedRoot.updateMatrixWorld(true);
   };
-  sittingCharacters.delete('Ted');
-  standingCharacters.add('Ted');
-  standingReady.add('Ted');
-  tedRoot.position.set(-1.05, parkHeightAt(-1.05, 0.2), 0.2);
-  tedRoot.rotation.y = Math.atan2(sooAh.position.x - tedRoot.position.x, sooAh.position.z - tedRoot.position.z);
-  if (playTedStandingIdle(0)) {
+  tedRoot.position.set(seatAnchors.Ted.x, parkHeightAt(seatAnchors.Ted.x, seatAnchors.Ted.z), seatAnchors.Ted.z);
+  tedRoot.rotation.y = 0;
+  placeAtBenchAnchor('Ted', seatAnchors.Ted);
+  const tedSeatedAction = playClip('Ted', sittingClips.Ted, { loop: true, fade: 0 });
+  tedSeatedAction?.setEffectiveWeight(1);
+  if (tedSeatedAction) {
     characterMixers.Ted.update(0);
-    groundTedDuringStand();
-    saveStandingPose('Ted');
+    alignTedPelvisToSeat({ horizontal: true });
   }
   const sittingDown = new Set();
   const sitFinishHandlers = {};
