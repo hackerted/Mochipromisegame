@@ -1584,6 +1584,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   const cameraViewOffsets = { front: 0, left: Math.PI / 2, right: -Math.PI / 2, back: Math.PI };
   const followCamera = { mode: 'front', angle: 0, targetAngle: 0, pitch: 0.28, distance: 2.4 };
   const followTarget = new T.Vector3();
+  const cafeFollowTarget = new T.Vector3();
   const wrapAngle = (value) => Math.atan2(Math.sin(value), Math.cos(value));
   const routeSpawn = { x: 0, z: 20.5 }; // north entrance, across the road from Lee's Cafe
   // Mr. Lee guards the bench: a loop across the approach between the spawn and Soo-ah/Ted,
@@ -1630,6 +1631,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     talks: [false, false],
     talking: null,
     runRequested: false,
+    companionRunning: false,
   };
   const cafeRouteNodes = [
     { x: 0, z: -33.1 }, { x: 0, z: -28.6 }, { x: 0, z: -24.7 }, { x: 0, z: -16 },
@@ -2145,11 +2147,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       const companion = characterRoots[selectedCharacter === 'Ted' ? 'SooAh' : 'Ted'];
       const pairDistance = Math.hypot(root.position.x - companion.position.x, root.position.z - companion.position.z);
       followCamera.distance = Math.max(followCamera.distance, 4.8, pairDistance * 1.8 + 2.1);
-      followTarget.set(
+      cafeFollowTarget.set(
         (root.position.x + companion.position.x) / 2,
-        (root.position.y + companion.position.y) / 2 + 0.92,
+        (walkableHeightAt(root.position.x, root.position.z)
+          + walkableHeightAt(companion.position.x, companion.position.z)) / 2 + 0.92,
         (root.position.z + companion.position.z) / 2,
       );
+      followTarget.lerp(cafeFollowTarget, 1 - Math.exp(-dt * 9));
     } else {
       followTarget.set(root.position.x, root.position.y + 0.7, root.position.z);
     }
@@ -2426,10 +2430,13 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const dx = targetX - root.position.x;
     const dz = targetZ - root.position.z;
     const distance = Math.hypot(dx, dz);
-    if (distance < 0.48) {
+    const leaderWalking = walkingCharacters.has(leaderName);
+    if (distance < 0.48 && !leaderWalking) {
+      cafeJourney.companionRunning = false;
       stopCafeWalker(name);
       return;
     }
+    if (!leaderWalking && !walkingCharacters.has(name) && distance < 0.82) return;
     if (!standingReady.has(name) || turnStates[name]) return;
 
     const targetYaw = Math.atan2(dx, dz);
@@ -2449,7 +2456,14 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     }
     root.rotation.y = targetYaw;
 
-    const running = cafeJourney.runRequested || distance > 1.7;
+    const leaderMode = movementModes[leaderName];
+    const moveAlongside = leaderWalking && distance < 0.82;
+    if (cafeJourney.runRequested || moveAlongside) cafeJourney.companionRunning = false;
+    else if (distance > 2.35) cafeJourney.companionRunning = true;
+    else if (distance < 1.45) cafeJourney.companionRunning = false;
+    const running = moveAlongside
+      ? leaderMode === 'running' || leaderMode === 'lookingBehindRunning'
+      : cafeJourney.runRequested || cafeJourney.companionRunning;
     if (running && !runningClips[name]) {
       ensureClip(name === 'SooAh' ? 'SooAhRun' : 'TedRun').catch((error) => console.error(error));
     }
@@ -2461,19 +2475,27 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         .catch((error) => console.error(error));
       return;
     }
-    const speed = desiredMode === 'running' ? runSpeeds[name] : walkSpeeds[name];
-    const step = Math.min(distance - 0.42, speed * dt);
+    const paceSpeed = moveAlongside ? currentSpeeds[leaderName]
+      : cafeJourney.companionRunning ? runSpeeds[name]
+        : cafeJourney.runRequested ? runSpeeds[leaderName] : walkSpeeds[leaderName];
+    const animationSpeed = desiredMode === 'running' ? runSpeeds[name] : walkSpeeds[name];
+    const directionX = moveAlongside ? Math.sin(leader.rotation.y) : dx / distance;
+    const directionZ = moveAlongside ? Math.cos(leader.rotation.y) : dz / distance;
+    const step = moveAlongside ? paceSpeed * dt : Math.min(distance - 0.42, paceSpeed * dt);
     if (step <= 0) return;
-    const next = moveRootWithBenchCollision(name, root, root.position.x + (dx / distance) * step, root.position.z + (dz / distance) * step);
+    const next = moveRootWithBenchCollision(name, root, root.position.x + directionX * step, root.position.z + directionZ * step);
     if (Math.hypot(next.x - root.position.x, next.z - root.position.z) < 0.0005) {
       stopCafeWalker(name);
       return;
     }
     if (movementModes[name] !== desiredMode) {
-      playClip(name, clip, { loop: true, fade: 0.18 });
+      const action = playClip(name, clip, { loop: true, fade: 0.18 });
+      if (action) action.timeScale = paceSpeed / animationSpeed;
       movementModes[name] = desiredMode;
       walkingCharacters.add(name);
       characterMode[name] = desiredMode;
+    } else if (characterActions[name]) {
+      characterActions[name].timeScale = paceSpeed / animationSpeed;
     }
     root.position.x = next.x;
     root.position.z = next.z;
@@ -3221,6 +3243,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     cafeJourney.talks = [false, false];
     cafeJourney.talking = null;
     cafeJourney.runRequested = false;
+    cafeJourney.companionRunning = false;
     school.active = false;
     school.phase = 'complete';
     parkLimit = 42;
