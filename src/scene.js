@@ -1672,6 +1672,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
   let mrsLeeGestureAction = null;
   let mrsLeeTalkingAction = null;
   let mrsLeeTalkingClip = null;
+  let mrsLeeWalkAction = null;
+  let mrsLeeWalkClip = null;
+  let mrsLeeMode = 'idle';
+  const mrsApproachPoint = new T.Vector3();
+  const mrsApproachTangent = new T.Vector3();
   const schoolDialogue = {
     Ted: [
       'The next school day, Ted and Soo-ah meet at the school entrance.',
@@ -3332,14 +3337,16 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         fbxLoader.loadAsync('./assets/characters/mrs-lee-happy-gesture.fbx'),
         fbxLoader.loadAsync('./assets/characters/mr-lee-talking-home.fbx'),
         ensureClip('MrsLeeTalking'),
+        ensureClip('MrLeeWalk'),
         textureLoader.loadAsync('./assets/textures/family/mrs-lee.png'),
-      ]).then(([mrsAsset, mrAsset, talkingClip, texture]) => {
+      ]).then(([mrsAsset, mrAsset, talkingClip, walkClip, texture]) => {
         const mrsGestureClip = mrsAsset.animations?.[0];
         mrLeeHomeTalkClip = mrAsset.animations?.[0];
         if (!mrsGestureClip) throw new Error('Mrs Lee home gesture FBX has no animation clip.');
         if (!mrLeeHomeTalkClip) throw new Error('Mr Lee home talking FBX has no animation clip.');
         mrsLeeRoot = mrsAsset;
         mrsLeeTalkingClip = talkingClip;
+        mrsLeeWalkClip = inPlaceFbxWalk(mrLeeClips.walk ?? walkClip);
         applyCharacterTexture(mrsLeeRoot, texture, maxAnisotropy, true);
         fitToHeight(mrsLeeRoot, 1.48);
         mrsLeeRoot.name = 'MrsLeeHome';
@@ -3358,6 +3365,11 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
         mrsLeeGestureAction = mrsLeeMixer.clipAction(mrsGestureClip);
         mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
         mrsLeeGestureAction.clampWhenFinished = true;
+        mrsLeeMixer.addEventListener('finished', (event) => {
+          if (event.action === mrsLeeGestureAction && mrsLeeMode === 'supportive' && family.active && !family.mrsApproach) {
+            playMrsLeeMode('idle');
+          }
+        });
         mixers.push(mrLeeHomeMixer, mrsLeeMixer);
       }).catch((error) => {
         familyAssetsPromise = null;
@@ -3384,23 +3396,48 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
 
   function playMrsLeeMode(mode) {
     if (!mrsLeeMixer) return false;
-    if (mode === 'talking' && mrsLeeTalkingClip) {
-      const action = mrsLeeMixer.clipAction(mrsLeeTalkingClip);
+    if (mode === 'walking' && mrsLeeWalkClip) {
+      const action = mrsLeeMixer.clipAction(mrsLeeWalkClip);
+      if (action === mrsLeeWalkAction && action.isRunning()) return true;
       action.reset();
       action.setLoop(T.LoopRepeat, Infinity);
       action.clampWhenFinished = false;
       mrsLeeGestureAction?.fadeOut(0.14);
       mrsLeeTalkingAction?.fadeOut(0.14);
+      mrsLeeWalkAction?.fadeOut(0.14);
       action.fadeIn(0.14).play();
-      mrsLeeTalkingAction = action;
+      mrsLeeWalkAction = action;
+      mrsLeeMode = mode;
       return true;
     }
+    if ((mode === 'talking' || mode === 'idle') && mrsLeeTalkingClip) {
+      const action = mrsLeeMixer.clipAction(mrsLeeTalkingClip);
+      if (action === mrsLeeTalkingAction && action.isRunning()) {
+        action.timeScale = mode === 'idle' ? 0.55 : 1;
+        mrsLeeMode = mode;
+        return true;
+      }
+      action.reset();
+      action.setLoop(T.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+      mrsLeeGestureAction?.fadeOut(0.14);
+      mrsLeeTalkingAction?.fadeOut(0.14);
+      mrsLeeWalkAction?.fadeOut(0.14);
+      action.timeScale = mode === 'idle' ? 0.55 : 1;
+      action.fadeIn(0.14).play();
+      mrsLeeTalkingAction = action;
+      mrsLeeMode = mode;
+      return true;
+    }
+    if (mode === 'supportive' && mrsLeeMode === mode && mrsLeeGestureAction?.isRunning()) return true;
     mrsLeeTalkingAction?.fadeOut(0.14);
+    mrsLeeWalkAction?.fadeOut(0.14);
     if (!mrsLeeGestureAction) return false;
     mrsLeeGestureAction.reset();
     mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
     mrsLeeGestureAction.clampWhenFinished = true;
     mrsLeeGestureAction.fadeIn(0.14).play();
+    mrsLeeMode = 'supportive';
     return true;
   }
 
@@ -3464,16 +3501,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     if (family.mrsApproach) {
       const move = family.mrsApproach;
       move.elapsed = Math.min(move.duration, move.elapsed + dt);
-      const scaled = (move.elapsed / move.duration) * (move.points.length - 1);
-      const segment = Math.min(move.points.length - 2, Math.floor(scaled));
-      const local = scaled - segment;
-      const a = move.points[segment];
-      const b = move.points[segment + 1];
-      const eased = local * local * (3 - 2 * local);
-      mrsLeeRoot.position.set(a.x + (b.x - a.x) * eased, 0, a.z + (b.z - a.z) * eased);
-      faceFamilyActor(mrsLeeRoot, characterRoots.SooAh);
+      const progress = move.elapsed / move.duration;
+      move.path.getPointAt(progress, mrsApproachPoint);
+      move.path.getTangentAt(progress, mrsApproachTangent);
+      mrsLeeRoot.position.set(mrsApproachPoint.x, 0, mrsApproachPoint.z);
+      mrsLeeRoot.rotation.y = Math.atan2(mrsApproachTangent.x, mrsApproachTangent.z);
       if (move.elapsed >= move.duration) {
-        mrsLeeRoot.position.set(b.x, 0, b.z);
+        move.path.getPointAt(1, mrsApproachPoint);
+        mrsLeeRoot.position.set(mrsApproachPoint.x, 0, mrsApproachPoint.z);
+        faceFamilyActor(mrsLeeRoot, characterRoots.SooAh);
         family.mrsApproach = null;
         playMrsLeeMode('supportive');
       }
@@ -3559,10 +3595,7 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
       mrLeeHomeAction = null;
       setMrLeeHomeMode('idle');
       if (mrsLeeGestureAction) {
-        mrsLeeGestureAction.reset();
-        mrsLeeGestureAction.setLoop(T.LoopOnce, 1);
-        mrsLeeGestureAction.clampWhenFinished = true;
-        mrsLeeGestureAction.play();
+        playMrsLeeMode('supportive');
       }
       groundTedDuringStand();
       groundSooAhDuringStand();
@@ -3603,16 +3636,15 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     } else if (message.includes('I was afraid you would say no.')) {
       family.phase = 'choice';
     } else if (message.startsWith('Mrs. Lee: You passed?')) {
+      const points = [
+        [-0.8, 0.92], [-1.35, 0.92], [-1.35, -0.25], [0.9, -0.35],
+      ].map(([x, z]) => new T.Vector3(x, 0, z));
       family.mrsApproach = {
         elapsed: 0,
-        duration: 1.8,
-        points: [
-          { x: -0.8, z: 0.92 },
-          { x: -1.35, z: 0.92 },
-          { x: -1.35, z: -0.25 },
-          { x: 0.9, z: -0.35 },
-        ],
+        duration: 4.6,
+        path: new T.CatmullRomCurve3(points, false, 'centripetal'),
       };
+      playMrsLeeMode('walking');
     }
     if (family.dialogueIndex >= familyDialogue.length) {
       family.phase = 'complete';
