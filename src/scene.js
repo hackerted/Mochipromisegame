@@ -2424,22 +2424,23 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     const name = leaderName === 'Ted' ? 'SooAh' : 'Ted';
     const leader = characterRoots[leaderName];
     const root = characterRoots[name];
-    const side = name === 'Ted' ? 0.58 : -0.58;
+    const side = name === 'Ted' ? -0.58 : 0.58;
     const targetX = leader.position.x - Math.sin(leader.rotation.y) * 0.72 + Math.cos(leader.rotation.y) * side;
     const targetZ = leader.position.z - Math.cos(leader.rotation.y) * 0.72 - Math.sin(leader.rotation.y) * side;
     const dx = targetX - root.position.x;
     const dz = targetZ - root.position.z;
     const distance = Math.hypot(dx, dz);
     const leaderWalking = walkingCharacters.has(leaderName);
+    const moveAlongside = leaderWalking && distance < 1.0;
     if (distance < 0.48 && !leaderWalking) {
       cafeJourney.companionRunning = false;
       stopCafeWalker(name);
       return;
     }
-    if (!leaderWalking && !walkingCharacters.has(name) && distance < 0.82) return;
+    if (!leaderWalking && !walkingCharacters.has(name) && distance < 1.0) return;
     if (!standingReady.has(name) || turnStates[name]) return;
 
-    const targetYaw = Math.atan2(dx, dz);
+    const targetYaw = moveAlongside ? leader.rotation.y : Math.atan2(dx, dz);
     const turnDelta = wrapAngle(targetYaw - root.rotation.y);
     if (Math.abs(turnDelta) > 0.55) {
       const direction = turnDelta < 0 ? 'left' : 'right';
@@ -2457,7 +2458,6 @@ export async function createScene({ THREE: T = THREE, renderer, loaders = {} }) 
     root.rotation.y = targetYaw;
 
     const leaderMode = movementModes[leaderName];
-    const moveAlongside = leaderWalking && distance < 0.82;
     if (cafeJourney.runRequested || moveAlongside) cafeJourney.companionRunning = false;
     else if (distance > 2.35) cafeJourney.companionRunning = true;
     else if (distance < 1.45) cafeJourney.companionRunning = false;
